@@ -1,0 +1,106 @@
+# One execution per agent.
+#
+# The mechanical code starts an execution of this job the moment it
+# detects something worth an agent's attention; the reconciler starts one
+# when a subsystem has escalations waiting for a master. Nothing here is
+# a scheduled job and nothing here is a singleton - twenty concurrent
+# agents are twenty executions, and one of them failing is one execution.
+#
+# The arguments are always supplied as a container override, so the args
+# below are only a safe default for a hand-run smoke test.
+#
+#   gcloud run jobs replace cloud/turnstile-agent.yaml \
+#     --project your-gcp-project --region us-central1
+#
+#   gcloud run jobs execute turnstile-agent --project your-gcp-project \
+#     --region us-central1 --args="-m,cloud.agent_job,--subsystem,discovery,--master,--dry-run"
+#
+# The service account needs: secretmanager.versions.access on
+# CURSOR_API_KEY and GH_TOKEN, object read/write on the agent store, and
+# run.jobs.run / run.executions.list so a master can be started.
+#
+# The reconciler also launches masters on this job. Grant BOTH:
+#   gcloud run jobs add-iam-policy-binding turnstile-agent \
+#     --project your-gcp-project --region us-central1 \
+#     --member serviceAccount:turnstile@your-gcp-project.iam.gserviceaccount.com \
+#     --role roles/run.developer
+#   gcloud run jobs add-iam-policy-binding turnstile-agent \
+#     --project your-gcp-project --region us-central1 \
+#     --member serviceAccount:turnstile@your-gcp-project.iam.gserviceaccount.com \
+#     --role roles/run.invoker
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: turnstile-agent
+  labels:
+    cloud.googleapis.com/location: us-central1
+  annotations:
+    # Agents are independent. There is no reason to hold one back because
+    # another is running, and a low cap here would silently serialise the
+    # whole system the way the single tick used to.
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    spec:
+      taskCount: 1
+      # A retry would spawn a second Cursor agent for the same trigger and
+      # pay twice for one question. If an execution dies, the mechanical
+      # condition that started it will fire again on the next real run.
+      parallelism: 1
+      template:
+        spec:
+          maxRetries: 0
+          # An agent run legitimately takes tens of minutes, and this
+          # execution waits for it. TURNSTILE_AGENT_MAX_WAIT_S must stay
+          # comfortably under this.
+          timeoutSeconds: 10800
+          serviceAccountName: turnstile@your-gcp-project.iam.gserviceaccount.com
+          containers:
+          - name: turnstile-agent
+            image: us-central1-docker.pkg.dev/your-gcp-project/your-artifact-repo/turnstile:g9f2a69c272ab
+            command:
+            - python
+            args:
+            - -m
+            - cloud.agent_job
+            - --subsystem
+            - discovery
+            - --master
+            - --dry-run
+            resources:
+              limits:
+                cpu: "1"
+                memory: 2Gi
+            env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: your-gcp-project
+            - name: GOOGLE_CLOUD_LOCATION
+              value: us-central1
+            # Two uses, neither of them a queue: the escalation index a
+            # master reads, and the run archive nothing depends on.
+            - name: TURNSTILE_AGENT_STORE
+              value: gs://your-bucket
+            - name: TURNSTILE_WORKSPACE
+              value: /workspace
+            # Below the job timeout, so a hung agent ends as an expired
+            # run this execution can record rather than as a killed task.
+            - name: TURNSTILE_AGENT_MAX_WAIT_S
+              value: "9000"
+            - name: CURSOR_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: latest
+                  name: CURSOR_API_KEY
+            # Clones the subsystem repo and pushes green merges.
+            - name: GH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: latest
+                  name: GH_TOKEN
+            # SLACK_WEBHOOK_URL: grant secretAccessor on SLACK_WEBHOOK_URL to
+            # turnstile@your-gcp-project.iam.gserviceaccount.com, then add:
+            #   - name: SLACK_WEBHOOK_URL
+            #     valueFrom:
+            #       secretKeyRef:
+            #         key: latest
+            #         name: SLACK_WEBHOOK_URL

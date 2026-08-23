@@ -1,0 +1,12 @@
+name: agent-layer-main
+description: Build turnstile and retarget agent Cloud Run jobs on push to main
+repositoryEventConfig:
+  repository: projects/your-gcp-project/locations/us-central1/connections/github-your-org/repositories/turnstile
+  push:
+    branch: ^main$
+filename: cloud/cloudbuild.yaml
+serviceAccount: projects/your-gcp-project/serviceAccounts/your-pipeline-job@your-gcp-project.iam.gserviceaccount.com
+substitutions:
+  _TAG: g${SHORT_SHA}
+  _GIT_SHA: ${SHORT_SHA}
+includeBuildLogs: INCLUDE_BUILD_LOGS_WITH_STATUS

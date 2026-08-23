@@ -1,0 +1,134 @@
+{
+  "subsystem": "retrieval",
+  "protected_branches": ["main", "master"],
+
+  "_note": [
+    "Green authority is narrow here on purpose. Agents may extend the exam;",
+    "they may not touch the index write path or the ranking code. Ranking is",
+    "the highest-blast-radius code in the product and has no cheap oracle, so",
+    "it stays core (AMBER) rather than being given a weak check.",
+    "",
+    "The same reasoning governs the downstream judge. Adding a way to test the judge is",
+    "green; moving a bar the judge reads is not, because every headline number",
+    "the subsystem reports is a function of those bars and the temptation to",
+    "tune them until the report looks good is the failure mode this whole",
+    "subsystem was built to detect."
+  ],
+
+  "limits": {
+    "files": 3,
+    "net_loc": 80,
+    "gross_churn": 200,
+    "new_files_in_zone": 1,
+    "new_files_outside_zone": 0,
+    "new_dependencies": 0,
+    "new_config_keys": 0,
+    "signature_changes": 0,
+    "branch_tokens": 10,
+    "nesting_depth": 1,
+    "dir_population": 15,
+    "filename_similarity": 0.8
+  },
+
+  "red": [
+    {
+      "id": "R1-index-write-path",
+      "paths": [
+        "server.py",
+        "core/utils/gcs_snapshots.py",
+        "data/**",
+        "cloud/serving/**"
+      ],
+      "reason": "index sync, snapshot resolution and the tier lane; repaired once already and not re-opened to agents"
+    },
+    {
+      "id": "R2-auth",
+      "paths": ["core/auth/**", "core/oauth.py", "core/mcp_config.py"],
+      "reason": "authentication and service configuration"
+    },
+    {
+      "id": "R3-infra",
+      "paths": [
+        "Dockerfile*",
+        "cloud/judge/**",
+        ".github/workflows/**",
+        "scripts/deploy*"
+      ],
+      "reason": "infrastructure"
+    },
+    {
+      "id": "R4-secrets",
+      "paths": [".env*", "**/secrets/**", "**/*credential*"],
+      "reason": "credentials"
+    },
+    {
+      "id": "R5-instruments",
+      "paths": [
+        "artifacts/evals/baseline/**",
+        "lifeblood/utils/**",
+        "lifeblood/catalogue.json",
+        "skeleton.json",
+        "agent_state/**"
+      ],
+      "reason": "the frozen baseline is the exam; recall is always reported against it as well as against the extended set"
+    },
+    {
+      "id": "R6-judge-bars",
+      "paths": ["judge/config.py", "judge/breaches.py"],
+      "reason": "the judging thresholds and the conditions that wake agents. Every headline number is a function of these, so an agent that could move them could make any report say anything. Threshold changes go through a human with the control-set result attached."
+    }
+  ],
+
+  "zones": [
+    {
+      "id": "golden-queries",
+      "serves": "OPTIMISE — the exam gets harder as the corpus grows",
+      "paths": ["artifacts/evals/goldens/**"],
+      "green_for": ["retrieval-*", "retrieval-retro"],
+      "append_only": true,
+      "oracle": "python -m harness.oracle_kit.append_only --changed {changed}",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 2, "net_loc": 300, "new_files_in_zone": 1},
+      "note": "Adding easy goldens moves the extended number and leaves the frozen baseline untouched, so gaming is visible at a glance rather than hidden."
+    },
+    {
+      "id": "canaries",
+      "serves": "OPTIMISE — per-campaign findability coverage",
+      "paths": ["artifacts/evals/canaries/**"],
+      "green_for": ["retrieval-*", "retrieval-retro"],
+      "append_only": true,
+      "oracle": "python -m harness.oracle_kit.append_only --changed {changed}",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 2, "net_loc": 200, "new_files_in_zone": 1}
+    },
+    {
+      "id": "judge-mutations",
+      "serves": "OPTIMISE — the control set only measures failure modes it can produce",
+      "paths": ["judge/control/mutations.py"],
+      "green_for": ["retrieval-judge-*", "retrieval-judge-retro"],
+      "oracle": "python -m pytest judge/tests/test_control.py -q",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 1, "net_loc": 120},
+      "note": "Adding a mutation family makes the exam harder and can only lower the recall number, so it is the one edit here that cannot flatter the report."
+    },
+    {
+      "id": "metric-definitions",
+      "serves": "OPTIMISE — what the system measures",
+      "paths": ["lifeblood/metrics/**"],
+      "green_for": ["*-retro"],
+      "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 4, "net_loc": 120, "new_files_in_zone": 2}
+    },
+    {
+      "id": "pit-prompts",
+      "serves": "OPTIMISE — how the retrieval agents behave",
+      "paths": [".cursor/agents/pit/**"],
+      "green_for": ["*-retro"],
+      "deny_self": true,
+      "oracle": "python -m harness.oracle_kit.prompt_lint --changed {changed} --agent ${TURNSTILE_AGENT_ID}",
+      "oracle_timeout_s": 120,
+      "limits": {"files": 2, "net_loc": 150}
+    }
+  ]
+}

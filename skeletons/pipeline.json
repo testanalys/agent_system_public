@@ -1,0 +1,264 @@
+{
+  "subsystem": "pipeline-dispatch",
+  "protected_branches": [
+    "main",
+    "master"
+  ],
+  "_note": [
+    "Zones are a property of (path, agent), not of a path alone.",
+    "A zone with green_for and no oracle is a config error and will not load:",
+    "a plate without an acceptance test is not a plate. Zones whose domain",
+    "oracle is not built yet carry green_for: [] and a pending_oracle note,",
+    "which makes them AMBER for everyone until the check exists. That is the",
+    "fail-safe direction and it is deliberate."
+  ],
+  "limits": {
+    "files": 3,
+    "net_loc": 80,
+    "gross_churn": 200,
+    "new_files_in_zone": 1,
+    "new_files_outside_zone": 0,
+    "new_dependencies": 0,
+    "new_config_keys": 0,
+    "signature_changes": 0,
+    "branch_tokens": 10,
+    "nesting_depth": 1,
+    "dir_population": 15,
+    "filename_similarity": 0.8
+  },
+  "red": [
+    {
+      "id": "R1-control-plane",
+      "paths": [
+        "pipeline/cloud/dispatcher/*",
+        "pipeline/cloud/dispatcher/**",
+        "local/dispatcher/*",
+        "local/dispatcher/**",
+        "core/pipeline/state*",
+        "core/pipeline/reconcil*"
+      ],
+      "reason": "control-plane logic; the mechanical layer is never edited by the stochastic one"
+    },
+    {
+      "id": "R2-schema",
+      "paths": [
+        "**/migrations/**",
+        "**/*.sql",
+        "core/models/**"
+      ],
+      "reason": "schema and migrations cross service boundaries and are not cleanly reversible"
+    },
+    {
+      "id": "R3-infra",
+      "paths": [
+        "pipeline/cloud/**/*.yaml",
+        "pipeline/cloud/**/*.yml",
+        "pipeline/cloud/Dockerfile*",
+        "**/cloudbuild*.yaml",
+        ".github/workflows/**",
+        "py_setup/**",
+        "**/Dockerfile*"
+      ],
+      "reason": "infrastructure and job/env deploy configs; changes here only take effect through a rebuild and a deploy, so they wait for the operator"
+    },
+    {
+      "id": "R4-secrets",
+      "paths": [
+        ".env*",
+        "**/secrets/**",
+        "**/*credential*",
+        "**/*service_account*"
+      ],
+      "reason": "credentials"
+    },
+    {
+      "id": "R5-instruments",
+      "paths": [
+        "utils/ops/data_quality/diarization_batch.py",
+        "utils/ops/data_quality/runner.py",
+        "utils/ops/data_quality/result.py",
+        "**/gates.py",
+        "**/fixtures/**",
+        "skeleton.json"
+      ],
+      "reason": "this is the instrument that grades the work; no agent edits the exam it sits"
+    },
+    {
+      "id": "R7-supervisor-definitions",
+      "paths": [
+        "agents/*-master.md",
+        "agents/*-retro.md",
+        "agents/_scale_framework.md",
+        ".cursor/hooks/**",
+        ".cursor/hooks.json"
+      ],
+      "reason": "the instructions of the agents that review other agents, and the operator's scale direction; an agent that can rewrite the reviewer above it is not supervised, so these reach the operator even when a master writes them"
+    }
+  ],
+  "zones": [
+    {
+      "id": "metric-definitions",
+      "serves": "OPTIMISE — what the system measures, and therefore when it thinks",
+      "paths": [
+        "lifeblood/metrics/**"
+      ],
+      "green_for": [
+        "*-retro",
+        "*-master"
+      ],
+      "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 4,
+        "net_loc": 120,
+        "new_files_in_zone": 2
+      },
+      "note": "A retro agent tunes what the system sees. The selftest holds the contract: it must still emit a valid reading, still be registered, and its history must still parse."
+    },
+    {
+      "id": "metric-instruments",
+      "serves": "OPTIMISE — how readings are captured; former categorical red for masters",
+      "paths": [
+        "lifeblood/utils/**",
+        "lifeblood/catalogue.json"
+      ],
+      "green_for": [
+        "*-master",
+        "*-retro"
+      ],
+      "touch_cost": 12,
+      "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 4,
+        "net_loc": 120,
+        "new_files_in_zone": 2
+      },
+      "note": "PIT agents still score 100 for leaving their plate onto these files. Masters and retros may land a fix here; touching them still adds a caution score."
+    },
+    {
+      "id": "spawn-conditions",
+      "serves": "OPTIMISE — when agents wake up, and how much reasoning runs per cycle",
+      "paths": [
+        "agents/agent_utils/**"
+      ],
+      "green_for": [
+        "*-retro",
+        "*-master"
+      ],
+      "oracle": "python -m pytest tests/test_breaches.py -q",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 2,
+        "net_loc": 80,
+        "new_files_in_zone": 1
+      },
+      "note": "A master that adds an investigating agent wires up what wakes it in the same change; an agent nothing triggers never runs."
+    },
+    {
+      "id": "agent-definitions",
+      "serves": "OPTIMISE — who investigates this subsystem, and what they are asked",
+      "paths": [
+        "agents/*.md"
+      ],
+      "green_for": [
+        "*-master"
+      ],
+      "deny_self": true,
+      "oracle": "python -m harness.oracle_kit.agent_defs --changed {changed} --repo {repo} --agent ${TURNSTILE_AGENT_ID}",
+      "oracle_timeout_s": 120,
+      "limits": {
+        "files": 3,
+        "net_loc": 200,
+        "new_files_in_zone": 1
+      },
+      "note": "The sharpest surface in the system. A master retunes the agents that investigate this subsystem and may add one; it never edits the file that defines itself (deny_self), and the supervisor definitions are RED above."
+    },
+    {
+      "id": "diarization-inference",
+      "serves": "SCALE — attribution quality per run",
+      "paths": [
+        "core/diarization/speaker_detection.py",
+        "core/diarization/coreference.py",
+        "core/diarization/assign.py",
+        "core/diarization/speaker_validation.py"
+      ],
+      "green_for": [
+        "pipeline-diarization-qa"
+      ],
+      "oracle_timeout_s": 900,
+      "limits": {
+        "files": 3,
+        "net_loc": 120,
+        "new_files_in_zone": 0
+      },
+      "note": "Inference only. engine.py, persist.py, store.py and db_mapping.py are wiring and stay core. Opens to diarization-qa and pipeline-retro once the fixture replay records a baseline.",
+      "oracle": "python -m utils.ops.data_quality.diarization_replay --min-recall-delta 0"
+    },
+    {
+      "id": "acquisition-layer",
+      "serves": "SCALE — source breadth; resolver and acquisition paths",
+      "paths": [
+        "core/custom_audio/sources/profiles/**",
+        "core/custom_audio/acquire.py",
+        "core/custom_audio/acquisition_repair.py",
+        "core/custom_audio/audio_validate.py",
+        "core/custom_audio/url_validation.py",
+        "core/custom_audio/source_resolver.py"
+      ],
+      "green_for": [
+        "pipeline-acquisition-qa",
+        "pipeline-self-improvement"
+      ],
+      "oracle_timeout_s": 600,
+      "limits": {
+        "files": 4,
+        "net_loc": 200,
+        "new_files_in_zone": 2
+      },
+      "note": "Profiles plus the resolver layer acquisition-qa actually edits. registry.py and lifecycle.py stay core. Self-improvement may touch the same surface for recurring acquire failures only.",
+      "oracle": "python -m utils.ops.acquire.verify_resolver --name {changed} --sample 3"
+    },
+    {
+      "id": "self-improvement-plates",
+      "serves": "SUSTAIN — narrow helpers for recurring automation defects",
+      "paths": [
+        "core/custom_audio/acquisition_repair.py",
+        "core/diarization/speaker_validation.py"
+      ],
+      "green_for": [
+        "pipeline-self-improvement"
+      ],
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 2,
+        "net_loc": 80,
+        "new_files_in_zone": 0
+      },
+      "note": "Strict plate: two files, no new files. Schema, yaml, secrets stay RED.",
+      "oracle": "python -m pytest tests/test_breaches.py -q"
+    },
+    {
+      "id": "pipeline-outputs",
+      "serves": "SCALE — session artefacts and proposals",
+      "paths": [
+        "agent_state/proposals/**",
+        "agent_state/ledger/**",
+        "lifeblood/state/**",
+        "dispatch/plans/**"
+      ],
+      "green_for": [
+        "pipeline-*",
+        "*-retro"
+      ],
+      "oracle": "python -m pytest tests/test_breaches.py -q",
+      "oracle_timeout_s": 120,
+      "limits": {
+        "files": 6,
+        "net_loc": 150,
+        "new_files_in_zone": 4
+      },
+      "note": "Proposals, ledger notes, and metric snapshots are normal session output — not control-plane."
+    }
+  ]
+}

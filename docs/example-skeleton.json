@@ -1,0 +1,81 @@
+{
+  "_readme": [
+    "A zone map. Copy this into a repository you want to classify changes in,",
+    "as skeleton.json, and edit the three sections below.",
+    "",
+    "In production a zone map does NOT live in the repo it governs — it is",
+    "loaded from outside via Skeleton.load_file(), so an agent working in a",
+    "checkout cannot widen its own permissions. The in-repo location is for",
+    "local use and CI, where you are the one running it."
+  ],
+
+  "subsystem": "example",
+  "protected_branches": ["main", "master"],
+
+  "_limits": [
+    "Shape budget for one session. These are not hard stops — going over",
+    "costs points. Size alone never blocks a change; it only makes stacked",
+    "smells reach the threshold sooner.",
+    "",
+    "filename_similarity and dir_population are the anti-sprawl pair: they",
+    "catch foo_v2.py appearing beside foo.py, and directories quietly",
+    "growing past the point anyone reads them."
+  ],
+  "limits": {
+    "files": 3,
+    "net_loc": 100,
+    "gross_churn": 240,
+    "new_files_in_zone": 1,
+    "new_files_outside_zone": 0,
+    "new_dependencies": 0,
+    "new_config_keys": 0,
+    "signature_changes": 0,
+    "nesting_depth": 1,
+    "dir_population": 15,
+    "filename_similarity": 0.8
+  },
+
+  "_red": [
+    "Frozen surfaces. One hit is categorical — no size of diff merges here.",
+    "Give every rule a reason: the reason is quoted back to the agent, and it",
+    "is the only explanation it gets."
+  ],
+  "red": [
+    {
+      "id": "R-instruments",
+      "paths": ["metrics/**", "**/verify*"],
+      "reason": "the metric an agent is graded on is not a metric it may redefine"
+    },
+    {
+      "id": "R-infra",
+      "paths": ["Dockerfile*", ".github/workflows/**", "**/*.tf"],
+      "reason": "infrastructure takes effect through a deploy, so it waits for a human"
+    },
+    {
+      "id": "R-secrets",
+      "paths": [".env*", "**/secrets/**", "**/*credential*"],
+      "reason": "credentials"
+    }
+  ],
+
+  "_zones": [
+    "Where agents may write. green_for lists the agent ids allowed in.",
+    "",
+    "Every zone needs an oracle: a command that exits non-zero when the",
+    "change did not work. A zone declared without one refuses to load, by",
+    "design — granting merge rights with no acceptance check is the failure",
+    "this system exists to prevent.",
+    "",
+    "Verify each oracle catches a deliberately broken input before you open",
+    "the zone. An oracle that cannot fail is not an oracle."
+  ],
+  "zones": [
+    {
+      "id": "example-layer",
+      "paths": ["src/routes/**", "src/lanes/**"],
+      "green_for": ["example-investigator"],
+      "oracle": "python -m tools.verify --require 1",
+      "oracle_timeout_s": 600
+    }
+  ]
+}

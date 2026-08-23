@@ -1,0 +1,8 @@
+# Deliberately short. The harness is standard-library-only; these are
+# the entire runtime surface the agent plane needs beyond it.
+# google-cloud-run: reconciler launches masters via run_v2.JobsClient.
+# Without it, tick_all reports open escalations then fails to start
+# turnstile-agent (was previously mis-logged as "launched").
+google-cloud-storage>=2.14
+google-api-core>=2.17
+google-cloud-run>=0.10

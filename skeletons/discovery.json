@@ -1,0 +1,276 @@
+{
+  "subsystem": "discovery",
+  "protected_branches": [
+    "main",
+    "master"
+  ],
+  "_note": [
+    "Discovery is the best fit for the free lane in the whole system: a new",
+    "harvest route has an unambiguous oracle — run it, and see whether a",
+    "verified-downloadable op comes out. Success is cheap to check, so an",
+    "agent can write production code with no review at all."
+  ],
+  "limits": {
+    "files": 3,
+    "net_loc": 100,
+    "gross_churn": 240,
+    "new_files_in_zone": 1,
+    "new_files_outside_zone": 0,
+    "new_dependencies": 0,
+    "new_config_keys": 0,
+    "signature_changes": 0,
+    "branch_tokens": 12,
+    "nesting_depth": 1,
+    "dir_population": 15,
+    "filename_similarity": 0.8
+  },
+  "red": [
+    {
+      "id": "R1-queue-ingest",
+      "paths": [
+        "scripts/ingest_pending_ops.py",
+        "services/queue*"
+      ],
+      "reason": "database ingest handoff; appending ops via queue_op is harvest output, editing ingest is not"
+    },
+    {
+      "id": "R3-infra",
+      "paths": [
+        "Dockerfile*",
+        "cloudbuild*.yaml",
+        "cloud/**/*.yaml",
+        "cloud/**/*.yml",
+        ".github/workflows/**"
+      ],
+      "reason": "infrastructure and job/env deploy configs; changes take effect only through a rebuild and a deploy, so they wait for the operator"
+    },
+    {
+      "id": "R4-secrets",
+      "paths": [
+        ".env*",
+        "**/secrets/**",
+        "**/*credential*"
+      ],
+      "reason": "credentials"
+    },
+    {
+      "id": "R5-instruments",
+      "paths": [
+        "tools/verify*",
+        "services/verify*",
+        "skeleton.json"
+      ],
+      "reason": "the verifier decides whether a route counts as working; the agent it grades does not get to loosen it"
+    },
+    {
+      "id": "R7-supervisor-definitions",
+      "paths": [
+        "agents/*-master.md",
+        "agents/*-retro.md",
+        "agents/_scale_framework.md",
+        ".cursor/hooks/**",
+        ".cursor/hooks.json"
+      ],
+      "reason": "the instructions of the agents that review other agents, and the operator's scale direction; an agent that can rewrite the reviewer above it is not supervised, so these reach the operator even when a master writes them"
+    },
+    {
+      "id": "R8-campaign-portfolio",
+      "paths": [
+        "campaigns/*.json"
+      ],
+      "reason": "campaign definitions are the operator's portfolio; agents grow harvest capacity around a campaign, they do not create or rewrite the campaign itself"
+    }
+  ],
+  "zones": [
+    {
+      "id": "freestyle-handoff",
+      "serves": "SCALE — freestyle interaction log and bake handoff artefacts",
+      "paths": [
+        "state/*/rd_retro_handoff/**",
+        "state/*/rd_retro_handoff.json",
+        "state/**/rd_retro_handoff/**",
+        "state/**/rd_retro_handoff.json"
+      ],
+      "green_for": [
+        "discovery-freestyle-rd"
+      ],
+      "oracle": "python -c \"import pathlib,sys; p=pathlib.Path('.'); hits=list(p.glob('state/*/rd_retro_handoff/interaction.jsonl')); sys.exit(0 if hits else 1)\"",
+      "oracle_timeout_s": 60,
+      "limits": {
+        "files": 12,
+        "net_loc": 400,
+        "gross_churn": 800,
+        "new_files_in_zone": 8
+      },
+      "note": "Freestyle's product is the interaction handoff, not harvester code. Bake reads this; freestyle writes it."
+    },
+    {
+      "id": "harvest-layer",
+      "serves": "SCALE — output volume; new routes bake into production and are live next run",
+      "paths": [
+        "harvesters/**"
+      ],
+      "green_for": [
+        "discovery-campaign-yield",
+        "discovery-route-decay",
+        "discovery-route-bake",
+        "*-master"
+      ],
+      "oracle_timeout_s": 900,
+      "limits": {
+        "files": 12,
+        "net_loc": 350,
+        "gross_churn": 500,
+        "new_files_in_zone": 3
+      },
+      "note": "The highest-value free lane in the system. Freestyle does not green here — bake does after a proven interaction log.",
+      "oracle": "python -m tools.harvest_verify --module {changed} --require-verified 1"
+    },
+    {
+      "id": "harvest-outputs",
+      "serves": "SCALE — operational artefacts a harvest session produces",
+      "paths": [
+        "queue/pending_ops.jsonl",
+        "queue/pending_video_ops.jsonl",
+        "campaigns/op_index.jsonl",
+        "tools/state/**",
+        "memory/learnings.md",
+        "memory/watchlist.md",
+        "state/**",
+        "agent_state/proposals/**",
+        "agent_state/ledger/**"
+      ],
+      "green_for": [
+        "discovery-campaign-yield",
+        "discovery-route-decay",
+        "discovery-freestyle-rd",
+        "discovery-route-bake",
+        "*-master"
+      ],
+      "oracle": "python -m pytest tests/test_queue_store.py -q",
+      "oracle_timeout_s": 120,
+      "limits": {
+        "files": 8,
+        "net_loc": 120,
+        "new_files_in_zone": 4
+      },
+      "note": "Queue rows, session state, harvester seen-files, and proposal JSON are normal session output — not control-plane."
+    },
+    {
+      "id": "queue-helpers",
+      "serves": "SCALE — queue_op / queue_store used by freestyle (run + rare helper fixes)",
+      "paths": [
+        "scripts/queue_op.py",
+        "scripts/queue_store.py"
+      ],
+      "green_for": [
+        "discovery-freestyle-rd",
+        "*-master",
+        "*-retro"
+      ],
+      "oracle": "python -m pytest tests/test_queue_store.py -q",
+      "oracle_timeout_s": 120,
+      "limits": {
+        "files": 2,
+        "net_loc": 80,
+        "new_files_in_zone": 0
+      },
+      "note": "Freestyle primarily runs these scripts. Small helper fixes are green; ingest stays RED."
+    },
+    {
+      "id": "campaign-config",
+      "serves": "SCALE — coverage breadth (yaml only; json campaign files are operator RED)",
+      "paths": [
+        "campaigns/*.yaml"
+      ],
+      "green_for": [
+        "discovery-campaign-yield",
+        "*-master"
+      ],
+      "limits": {
+        "files": 2,
+        "net_loc": 60,
+        "new_files_in_zone": 0
+      },
+      "note": "Campaign JSON is categorical RED (R8). Agents attach harvesters to a campaign from the harvest layer; they do not rewrite the portfolio.",
+      "oracle": "python -m tools.campaign_smoke --changed {changed}"
+    },
+    {
+      "id": "metric-definitions",
+      "serves": "OPTIMISE — what the system measures",
+      "paths": [
+        "lifeblood/metrics/**"
+      ],
+      "green_for": [
+        "*-retro",
+        "*-master"
+      ],
+      "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 4,
+        "net_loc": 120,
+        "new_files_in_zone": 2
+      }
+    },
+    {
+      "id": "metric-instruments",
+      "serves": "OPTIMISE — how readings are captured; former categorical red for masters",
+      "paths": [
+        "lifeblood/utils/**",
+        "lifeblood/catalogue.json"
+      ],
+      "green_for": [
+        "*-master",
+        "*-retro"
+      ],
+      "touch_cost": 12,
+      "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 4,
+        "net_loc": 120,
+        "new_files_in_zone": 2
+      },
+      "note": "PIT agents still score 100 for leaving their plate onto these files. Masters and retros may land a fix here; touching them still adds a caution score so a large instrument rewrite plus other smells can still trip RED."
+    },
+    {
+      "id": "spawn-conditions",
+      "serves": "OPTIMISE — when agents wake up",
+      "paths": [
+        "scripts/breaches.py"
+      ],
+      "green_for": [
+        "*-retro",
+        "*-master"
+      ],
+      "oracle": "python -m pytest tests/test_breaches.py -q",
+      "oracle_timeout_s": 300,
+      "limits": {
+        "files": 2,
+        "net_loc": 80,
+        "new_files_in_zone": 1
+      },
+      "note": "A master that adds an investigating agent wires up what wakes it in the same change; an agent nothing triggers never runs."
+    },
+    {
+      "id": "agent-definitions",
+      "serves": "OPTIMISE — who investigates this subsystem, and what they are asked",
+      "paths": [
+        "agents/*.md"
+      ],
+      "green_for": [
+        "*-master"
+      ],
+      "deny_self": true,
+      "oracle": "python -m harness.oracle_kit.agent_defs --changed {changed} --repo {repo} --agent ${TURNSTILE_AGENT_ID}",
+      "oracle_timeout_s": 120,
+      "limits": {
+        "files": 3,
+        "net_loc": 200,
+        "new_files_in_zone": 1
+      },
+      "note": "The sharpest surface in the system. A master retunes the agents that investigate this subsystem and may add one; it never edits the file that defines itself (deny_self), and the supervisor definitions are RED above."
+    }
+  ]
+}

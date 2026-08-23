@@ -1,0 +1,51 @@
+# Cloud Build trigger shape — realize a production-branch push.
+#
+# This file is documentation of the intended trigger, not something the
+# agent container runs. Attach one trigger per subsystem:
+#
+#   discovery  repo your-org/your-discovery-repo         branch master
+#   pipeline   repo your-org/your-pipeline-repo   branch live
+#
+# After a successful docker build, update every mechanical job for that
+# subsystem to the new image *digest* (not a floating tag):
+#
+#   gcloud run jobs update JOB --region us-central1 \
+#     --image IMAGE@sha256:DIGEST
+#
+# Label the image with GIT_SHA=$SHORT_SHA so the dashboard can compare
+# the running job to origin/master (or live).
+#
+# If this trigger is missing, git is still the source of truth: the
+# dashboard should show "production branch SHA ≠ job image SHA". Do not
+# un-merge a failed build.
+
+substitutions:
+  _REGION: us-central1
+  _JOBS: ""   # space-separated Cloud Run job names, set on the trigger
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --build-arg
+      - GIT_SHA=$SHORT_SHA
+      - -t
+      - ${_IMAGE}:$SHORT_SHA
+      - .
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: retarget-jobs
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        DIGEST=$(gcloud artifacts docker images describe ${_IMAGE}:$SHORT_SHA \
+          --format='get(image_summary.digest)')
+        for JOB in ${_JOBS}; do
+          gcloud run jobs update "$$JOB" --region ${_REGION} \
+            --image "${_IMAGE}@$${DIGEST}"
+        done
+
+images:
+  - ${_IMAGE}:$SHORT_SHA

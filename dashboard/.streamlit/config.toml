@@ -1,0 +1,12 @@
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+# Cloud Run terminates TLS; Streamlit must not assume a browser origin.
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = minimal

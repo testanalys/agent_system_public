@@ -1,0 +1,53 @@
+# Build agent-plane image and retarget Cloud Run jobs (push to main).
+#
+# Manual:
+#   SHA=$(git rev-parse --short=12 HEAD)
+#   gcloud builds submit . --config=cloud/cloudbuild.yaml --project=your-gcp-project \
+#     --substitutions=_GIT_SHA=$SHA
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/your-gcp-project/your-artifact-repo/turnstile
+  _GIT_SHA: unknown
+  _BUILD_TIME: unknown
+  _REGION: us-central1
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -f
+      - cloud/Dockerfile
+      - --build-arg
+      - 'GIT_SHA=${_GIT_SHA}'
+      - --build-arg
+      - 'BUILD_TIME=${_BUILD_TIME}'
+      - -t
+      - '${_IMAGE}:g${_GIT_SHA}'
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - '${_IMAGE}:g${_GIT_SHA}'
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: retarget
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        gcloud run jobs update turnstile-agent \
+          --project=your-gcp-project --region=${_REGION} \
+          --image=${_IMAGE}:g${_GIT_SHA} --quiet
+        gcloud run jobs update turnstile-reconciler \
+          --project=your-gcp-project --region=${_REGION} \
+          --image=${_IMAGE}:g${_GIT_SHA} --quiet
+
+images:
+  - '${_IMAGE}:g${_GIT_SHA}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

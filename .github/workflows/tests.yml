@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # HEAD~1 must exist for the classify step below.
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # No dependencies to install - the harness is standard library only.
+      # `pip install -e .` exists to put the console scripts on PATH.
+      - name: Install
+        run: pip install -e .
+
+      - name: Run the suite
+        run: python -m pytest -q
+
+      - name: Classify this repo's own last commit
+        # The classifier, run on the commit that triggered the build. Proves
+        # the tool works on a real repository and not only on fixtures.
+        run: |
+          cp docs/example-skeleton.json skeleton.json
+          harness --agent ci classify --base HEAD~1 || true

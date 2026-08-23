@@ -1,0 +1,70 @@
+# The escalation sweep. Every five minutes, and it does one thing.
+#
+# For each subsystem: does it have escalations waiting for a master, and
+# is a master already reading them? If not, start one - as an execution
+# of `turnstile-agent`, not in this container.
+#
+# This job used to spawn every agent in the system. It no longer spawns
+# any except masters, because the mechanical code raises point-in-time
+# and retro agents itself, at the moment and at the place it finds the
+# problem. What is left needs a periodic sweep for a real reason: an
+# escalation is raised by one execution and consumed by another, and
+# nothing else joins them.
+#
+# So a tick lists a few object keys and exits. It clones nothing, calls
+# no Cursor API, and holds no state - which is why it no longer needs
+# a workspace, a git identity, or an API key.
+#
+#   gcloud run jobs replace cloud/turnstile-reconciler.yaml \
+#     --project your-gcp-project --region us-central1
+#
+#   gcloud scheduler jobs create http turnstile-reconciler-tick \
+#     --project your-gcp-project --location us-central1 \
+#     --schedule "*/5 * * * *" \
+#     --uri "https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/your-gcp-project/jobs/turnstile-reconciler:run" \
+#     --http-method POST \
+#     --oauth-service-account-email turnstile@your-gcp-project.iam.gserviceaccount.com
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: turnstile-reconciler
+  labels:
+    cloud.googleapis.com/location: us-central1
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          # A tick launches a master only when none is running, and it asks
+          # Cloud Run rather than a state file, so a retry re-reads the
+          # world and reaches the same answer.
+          maxRetries: 1
+          timeoutSeconds: 300
+          serviceAccountName: turnstile@your-gcp-project.iam.gserviceaccount.com
+          containers:
+          - name: turnstile-reconciler
+            image: us-central1-docker.pkg.dev/your-gcp-project/your-artifact-repo/turnstile:g9f2a69c272ab
+            command:
+            - python
+            args:
+            - -m
+            - cloud.tick_all
+            - --all
+            resources:
+              limits:
+                cpu: "1"
+                memory: 512Mi
+            env:
+            - name: GOOGLE_CLOUD_PROJECT
+              value: your-gcp-project
+            - name: GOOGLE_CLOUD_LOCATION
+              value: us-central1
+            # Read-only here: the escalation index, and the lifeblood
+            # history that shares the prefix. Escalations are written by
+            # the agent executions that raise them.
+            - name: TURNSTILE_AGENT_STORE
+              value: gs://your-bucket
+            # Which job a master is launched as. Must match turnstile-agent.yaml.
+            - name: TURNSTILE_AGENT_JOB
+              value: turnstile-agent

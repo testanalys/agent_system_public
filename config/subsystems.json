@@ -1,0 +1,34 @@
+{
+  "_readme": [
+    "The reference data for this deployment. This is the file you edit.",
+    "",
+    "A subsystem is one repository the agents work in, plus the branch that",
+    "repository actually deploys from, plus the zone map that governs it.",
+    "",
+    "Declare the branch explicitly. Do not assume 'main'. A reconciler that",
+    "merges agent work into a branch nothing deploys from reports every merge",
+    "as a success and changes nothing in production — a failure that looks",
+    "exactly like working software.",
+    "",
+    "Override the location of this file with TURNSTILE_SUBSYSTEMS.",
+    "See INSTRUCTIONS.md for everything else that needs filling in."
+  ],
+
+  "subsystems": {
+    "example": {
+      "repo": "your-org/your-repo",
+      "branch": "main",
+      "skeleton": "skeletons/example.json"
+    }
+  },
+
+  "_commit_identity": [
+    "Commits the reconciler makes are attributed here. Keep it obviously",
+    "non-human: a merge that appears to come from a person is a merge",
+    "somebody will later be asked about and will not remember making."
+  ],
+  "commit_identity": {
+    "name": "turnstile-reconciler",
+    "email": "reconciler@example.invalid"
+  }
+}

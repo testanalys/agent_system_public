@@ -1,0 +1,56 @@
+# Deploy the operator dashboard to Cloud Run.
+#
+# Usage (from turnstile repo root):
+#   SHA=$(git rev-parse --short=12 HEAD)
+#   gcloud builds submit . --config=dashboard/cloudbuild.yaml --project=your-gcp-project \
+#     --substitutions=_TAG=g$SHA
+#   gcloud run deploy turnstile-dashboard --project=your-gcp-project --region=us-central1 \
+#     --image=us-central1-docker.pkg.dev/your-gcp-project/your-artifact-repo/turnstile-dashboard:g$SHA \
+#     --concurrency=80 --cpu=1 --memory=1Gi --max-instances=2 --timeout=3600 \
+#     --no-cpu-throttling --allow-unauthenticated=false
+#
+# CRITICAL: concurrency must be >>1. Streamlit fetches many /static/js/*.js
+# chunks in parallel. concurrency=1 aborts those requests and the browser
+# shows: TypeError: Failed to fetch dynamically imported module.
+#
+# Post-deploy smoke (must pass before telling anyone the URL is live):
+#   gcloud run services describe turnstile-dashboard --region=us-central1 \
+#     --format='value(spec.template.spec.containerConcurrency)'
+#   # expect >= 40
+#   # Then hard-refresh the IAP URL in a browser and confirm sidebar widgets
+#   # render with no "Failed to fetch dynamically imported module".
+
+substitutions:
+  _IMAGE: us-central1-docker.pkg.dev/your-gcp-project/your-artifact-repo/turnstile-dashboard
+  _TAG: dev
+  _REGION: us-central1
+  _SERVICE: turnstile-dashboard
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - -f
+      - dashboard/Dockerfile
+      - -t
+      - '${_IMAGE}:${_TAG}'
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - '${_IMAGE}:${_TAG}'
+
+  # Deploy is operator-credentialed: the default Cloud Build SA lacks
+  # run.services.get on turnstile-dashboard. After a green build:
+  #   gcloud run deploy ${_SERVICE} --project=$PROJECT_ID --region=${_REGION} \
+  #     --image=${_IMAGE}:${_TAG} --concurrency=80 --cpu=1 --memory=1Gi \
+  #     --max-instances=2 --timeout=3600 --no-cpu-throttling
+
+images:
+  - '${_IMAGE}:${_TAG}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

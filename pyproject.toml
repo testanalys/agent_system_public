@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "turnstile"
+version = "1.0.0"
+description = "A system-level harness for coding agents: classifier, gates, roles, reconciler"
+requires-python = ">=3.11"
+# Standard library only, deliberately. This installs into a slim Cloud Run
+# image with no build step and no platform constraints - which is also why
+# the Cursor transport is REST rather than the Python SDK, since the SDK is
+# a client for a locally launched CLI bridge.
+dependencies = []
+
+[project.scripts]
+harness = "harness.cli:main"
+history = "harness.history:main"
+agent-tick = "reconciler.tick:main"
+
+[tool.setuptools]
+packages = ["harness", "harness.oracle_kit", "harness.scorecard", "roles", "reconciler", "cloud", "dashboard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
