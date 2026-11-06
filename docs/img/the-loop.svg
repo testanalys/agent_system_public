@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="486" viewBox="0 0 760 486" role="img">
+<title>The loop</title>
+<desc>A production system runs on a schedule and leaves signals behind. A deterministic reconciler ranks them and spawns an agent, which works in its provider's CLI harness on its own VM. Its branch reaches the merge gate at the turn boundary. GREEN merges to main, which rebuilds production. RED becomes a new signal.</desc>
+<defs>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5F5E5A"/></marker>
+  <marker id="agr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3B6D11"/></marker>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A32D2D"/></marker>
+</defs>
+<style>
+  .t  { font: 400 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .th { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .ts { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .tl { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+</style>
+
+<rect x="0" y="0" width="760" height="486" fill="#ffffff"/>
+<text class="th" x="40" y="34" fill="#2C2C2A">Only the production job is scheduled. Signals start agents. Code decides what merges.</text>
+
+<!-- Row 1 -->
+<rect x="40" y="60" width="190" height="104" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+<text class="th" x="56" y="84" fill="#2C2C2A">The system</text>
+<text class="ts" x="56" y="104" fill="#5F5E5A">Deterministic code on compute</text>
+<text class="ts" x="56" y="121" fill="#5F5E5A">Runs on a schedule</text>
+<text class="ts" x="56" y="138" fill="#5F5E5A">a pipeline, an API,</text>
+<text class="ts" x="56" y="155" fill="#5F5E5A">or the harness itself</text>
+
+<rect x="285" y="60" width="190" height="104" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.75"/>
+<text class="th" x="301" y="84" fill="#042C53">Signals</text>
+<text class="ts" x="301" y="104" fill="#185FA5">What each run leaves behind</text>
+<text class="ts" x="301" y="121" fill="#185FA5">DQ issues from review agents</text>
+<text class="ts" x="301" y="138" fill="#185FA5">RED branches, open tasks,</text>
+<text class="ts" x="301" y="155" fill="#185FA5">crashed agent runs</text>
+
+<rect x="530" y="60" width="190" height="104" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="th" x="546" y="84" fill="#04342C">Reconciler</text>
+<text class="ts" x="546" y="104" fill="#0F6E56">Deterministic wake rules</text>
+<text class="ts" x="546" y="121" fill="#0F6E56">Ranks signals into a docket</text>
+<text class="ts" x="546" y="138" fill="#0F6E56">Starts the right agent class</text>
+<text class="ts" x="546" y="155" fill="#0F6E56">No model involved</text>
+
+<!-- Row 2 -->
+<rect x="40" y="266" width="190" height="104" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+<text class="th" x="56" y="290" fill="#173404">main → rebuild</text>
+<text class="ts" x="56" y="310" fill="#3B6D11">A merge is a deploy</text>
+<text class="ts" x="56" y="327" fill="#3B6D11">Signals it fixed are closed</text>
+<text class="ts" x="56" y="344" fill="#3B6D11">and reopen if raised again</text>
+
+<rect x="285" y="266" width="190" height="104" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="th" x="301" y="290" fill="#04342C">Merge gate</text>
+<text class="ts" x="301" y="310" fill="#0F6E56">Classifier + zone map</text>
+<text class="ts" x="301" y="327" fill="#0F6E56">Acceptance check per zone</text>
+<text class="ts" x="301" y="344" fill="#0F6E56">Judges the net diff,</text>
+<text class="ts" x="301" y="361" fill="#0F6E56">not the turns</text>
+
+<rect x="530" y="266" width="190" height="104" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.75"/>
+<text class="th" x="546" y="290" fill="#412402">Agent session</text>
+<text class="ts" x="546" y="310" fill="#854F0B">Provider's CLI harness + loop</text>
+<text class="ts" x="546" y="327" fill="#854F0B">Own VM, fresh clone</text>
+<text class="ts" x="546" y="344" fill="#854F0B">Sandbox servers to test on</text>
+<text class="ts" x="546" y="361" fill="#854F0B">Ends with a branch</text>
+
+<!-- Flow -->
+<line x1="232" y1="112" x2="282" y2="112" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+<text class="tl" x="257" y="104" text-anchor="middle" fill="#5F5E5A">emits</text>
+<line x1="477" y1="112" x2="527" y2="112" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+<text class="tl" x="502" y="104" text-anchor="middle" fill="#5F5E5A">reads</text>
+<line x1="625" y1="166" x2="625" y2="263" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+<text class="tl" x="633" y="219" fill="#5F5E5A">spawns</text>
+<line x1="528" y1="318" x2="478" y2="318" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+<text class="tl" x="503" y="310" text-anchor="middle" fill="#5F5E5A">branch</text>
+<line x1="283" y1="318" x2="233" y2="318" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#agr)"/>
+<text class="tl" x="258" y="310" text-anchor="middle" fill="#3B6D11">GREEN</text>
+<line x1="135" y1="264" x2="135" y2="167" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#agr)"/>
+<text class="tl" x="143" y="219" fill="#3B6D11">rebuild</text>
+<line x1="380" y1="264" x2="380" y2="167" stroke="#A32D2D" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ar)"/>
+<text class="tl" x="388" y="212" fill="#A32D2D">RED is a signal too:</text>
+<text class="tl" x="388" y="227" fill="#A32D2D">about the agent, or the gate</text>
+
+<!-- Legend -->
+<rect x="40" y="398" width="14" height="14" rx="3" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="ts" x="62" y="410" fill="#2C2C2A">Outer harness: ours, deterministic</text>
+<rect x="285" y="398" width="14" height="14" rx="3" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.75"/>
+<text class="ts" x="307" y="410" fill="#2C2C2A">Agent harness: the provider's</text>
+<rect x="530" y="398" width="14" height="14" rx="3" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+<text class="ts" x="552" y="410" fill="#2C2C2A">The system being maintained</text>
+
+<rect x="40" y="430" width="680" height="40" rx="4" fill="none" stroke="#B4B2A9" stroke-width="0.75" stroke-dasharray="4 4"/>
+<text class="t" x="60" y="455" fill="#2C2C2A">Agents propose. Code judges. Production is only ever changed by a merge.</text>
+</svg>

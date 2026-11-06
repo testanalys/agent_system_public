@@ -8,7 +8,7 @@
     "the highest-blast-radius code in the product and has no cheap oracle, so",
     "it stays core (AMBER) rather than being given a weak check.",
     "",
-    "The same reasoning governs the downstream judge. Adding a way to test the judge is",
+    "The same reasoning governs quotelint. Adding a way to test the judge is",
     "green; moving a bar the judge reads is not, because every headline number",
     "the subsystem reports is a function of those bars and the temptation to",
     "tune them until the report looks good is the failure mode this whole",
@@ -37,7 +37,7 @@
         "server.py",
         "core/utils/gcs_snapshots.py",
         "data/**",
-        "cloud/serving/**"
+        "cloud/modal/**"
       ],
       "reason": "index sync, snapshot resolution and the tier lane; repaired once already and not re-opened to agents"
     },
@@ -50,7 +50,7 @@
       "id": "R3-infra",
       "paths": [
         "Dockerfile*",
-        "cloud/judge/**",
+        "cloud/quotelint/**",
         ".github/workflows/**",
         "scripts/deploy*"
       ],
@@ -73,9 +73,18 @@
       "reason": "the frozen baseline is the exam; recall is always reported against it as well as against the extended set"
     },
     {
-      "id": "R6-judge-bars",
-      "paths": ["judge/config.py", "judge/breaches.py"],
-      "reason": "the judging thresholds and the conditions that wake agents. Every headline number is a function of these, so an agent that could move them could make any report say anything. Threshold changes go through a human with the control-set result attached."
+      "id": "R6-quotelint-bars",
+      "paths": ["quotelint/config.py"],
+      "reason": "the judging thresholds. Every headline number is a function of these, so an agent that could move them could make any report say anything. Threshold changes go through a human with the control-set result attached."
+    },
+    {
+      "id": "R7-supervisor-definitions",
+      "paths": [
+        "agents/*-master.md",
+        "agents/*-retro.md",
+        "agents/_scale_framework.md"
+      ],
+      "reason": "supervisor instructions; a reviewer that can edit what it is reviewed against is not a reviewer"
     }
   ],
 
@@ -102,33 +111,64 @@
       "limits": {"files": 2, "net_loc": 200, "new_files_in_zone": 1}
     },
     {
-      "id": "judge-mutations",
+      "id": "quotelint-mutations",
       "serves": "OPTIMISE — the control set only measures failure modes it can produce",
-      "paths": ["judge/control/mutations.py"],
-      "green_for": ["retrieval-judge-*", "retrieval-judge-retro"],
-      "oracle": "python -m pytest judge/tests/test_control.py -q",
+      "paths": ["quotelint/control/mutations.py"],
+      "green_for": ["retrieval-quotelint-judge"],
+      "oracle": "python -m pytest quotelint/tests/test_control.py -q",
       "oracle_timeout_s": 300,
       "limits": {"files": 1, "net_loc": 120},
       "note": "Adding a mutation family makes the exam harder and can only lower the recall number, so it is the one edit here that cannot flatter the report."
     },
     {
+      "id": "quotelint-detect",
+      "serves": "SCALE — who and what counts as a quote",
+      "paths": ["quotelint/detect/**"],
+      "green_for": ["retrieval-quotelint-detect"],
+      "oracle": "python -m pytest quotelint/tests/test_detect.py quotelint/tests/test_scope.py -q",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 3, "net_loc": 150},
+      "note": "The detect PIT patches admission bugs. Ranking and how we query the live index have no plate."
+    },
+    {
+      "id": "quotelint-judge",
+      "serves": "SCALE — how a match or a miss is decided",
+      "paths": ["quotelint/judge/**"],
+      "green_for": ["retrieval-quotelint-judge"],
+      "oracle": "python -m pytest quotelint/tests/test_judge.py quotelint/tests/test_control.py -q",
+      "oracle_timeout_s": 300,
+      "limits": {"files": 2, "net_loc": 150},
+      "note": "The rubric, not the bars. Thresholds stay in quotelint/config.py."
+    },
+    {
       "id": "metric-definitions",
       "serves": "OPTIMISE — what the system measures",
       "paths": ["lifeblood/metrics/**"],
-      "green_for": ["*-retro"],
+      "green_for": ["*-retro", "*-master"],
       "oracle": "python -m harness.oracle_kit.lifeblood_selftest --changed {changed} --backfill 30d",
       "oracle_timeout_s": 300,
       "limits": {"files": 4, "net_loc": 120, "new_files_in_zone": 2}
     },
     {
-      "id": "pit-prompts",
-      "serves": "OPTIMISE — how the retrieval agents behave",
-      "paths": [".cursor/agents/pit/**"],
-      "green_for": ["*-retro"],
+      "id": "spawn-conditions",
+      "serves": "OPTIMISE — when agents wake",
+      "paths": ["agents/agent_utils/**"],
+      "green_for": ["*-retro", "*-master"],
+      "oracle": "python -m pytest quotelint/tests/test_run.py quotelint/tests/test_agents.py -q",
+      "oracle_timeout_s": 180,
+      "limits": {"files": 2, "net_loc": 80, "new_files_in_zone": 1},
+      "note": "A master that adds an investigating agent wires up what wakes it in the same change."
+    },
+    {
+      "id": "agent-definitions",
+      "serves": "OPTIMISE — who investigates this subsystem, and what they are asked",
+      "paths": ["agents/*.md"],
+      "green_for": ["*-master"],
       "deny_self": true,
-      "oracle": "python -m harness.oracle_kit.prompt_lint --changed {changed} --agent ${TURNSTILE_AGENT_ID}",
+      "oracle": "python -m harness.oracle_kit.agent_defs --changed {changed} --repo {repo} --agent ${REGEST_AGENT_ID}",
       "oracle_timeout_s": 120,
-      "limits": {"files": 2, "net_loc": 150}
+      "limits": {"files": 3, "net_loc": 200, "new_files_in_zone": 1},
+      "note": "The master may retune investigating agents and add one. It never edits itself; supervisor definitions are RED. The search PIT has no code plate — it investigates and leaves a case."
     }
   ]
 }

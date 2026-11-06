@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="470" viewBox="0 0 760 470" role="img">
+<title>The merge gate</title>
+<desc>An agent branch is classified against a zone map and scorecard held in a repository the agent never clones. If it passes, the zone's acceptance check runs; if that passes, the branch merges to main and production rebuilds. A categorical RED goes to the operator, a scored RED becomes a blocked signal, and a failed check re-prompts the same session.</desc>
+<defs>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5F5E5A"/></marker>
+  <marker id="agr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3B6D11"/></marker>
+  <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#A32D2D"/></marker>
+  <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#854F0B"/></marker>
+</defs>
+<style>
+  .t  { font: 400 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .th { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .ts { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .tl { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+</style>
+
+<rect x="0" y="0" width="760" height="470" fill="#ffffff"/>
+<text class="th" x="40" y="34" fill="#2C2C2A">Source control is the control plane. A merge is a deploy.</text>
+
+<!-- harness repo band -->
+<rect x="168" y="52" width="368" height="190" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75" stroke-dasharray="5 4"/>
+<text class="tl" x="184" y="72" fill="#0F6E56">harness repo · never cloned by the agent it judges</text>
+
+<!-- branch -->
+<rect x="40" y="114" width="104" height="56" rx="28" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.75"/>
+<text class="th" x="92" y="138" text-anchor="middle" fill="#412402">agent</text>
+<text class="th" x="92" y="155" text-anchor="middle" fill="#412402">branch</text>
+
+<!-- classifier -->
+<rect x="184" y="88" width="160" height="136" rx="8" fill="#ffffff" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="th" x="200" y="112" fill="#04342C">1 · Classify</text>
+<text class="ts" x="200" y="134" fill="#0F6E56">zone map: open, frozen</text>
+<text class="ts" x="200" y="152" fill="#0F6E56">scorecard: shape, history,</text>
+<text class="ts" x="200" y="168" fill="#0F6E56">habits, narration</text>
+<text class="ts" x="200" y="186" fill="#0F6E56">scaled per agent role</text>
+<text class="ts" x="200" y="210" fill="#0F6E56">score &lt; 100 → GREEN</text>
+
+<!-- check -->
+<rect x="364" y="88" width="160" height="136" rx="8" fill="#ffffff" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="th" x="380" y="112" fill="#04342C">2 · Check</text>
+<text class="ts" x="380" y="134" fill="#0F6E56">the zone's acceptance</text>
+<text class="ts" x="380" y="152" fill="#0F6E56">command, run against</text>
+<text class="ts" x="380" y="168" fill="#0F6E56">the branch</text>
+<text class="ts" x="380" y="192" fill="#0F6E56">no check declared →</text>
+<text class="ts" x="380" y="210" fill="#0F6E56">the zone does not load</text>
+
+<!-- merge -->
+<rect x="572" y="88" width="148" height="136" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.75"/>
+<text class="th" x="588" y="112" fill="#173404">3 · Merge</text>
+<text class="ts" x="588" y="134" fill="#3B6D11">fast-forward main</text>
+<text class="ts" x="588" y="152" fill="#3B6D11">production rebuilds</text>
+<text class="ts" x="588" y="170" fill="#3B6D11">from main</text>
+<text class="ts" x="588" y="194" fill="#3B6D11">signals it named</text>
+<text class="ts" x="588" y="210" fill="#3B6D11">are closed</text>
+
+<line x1="146" y1="142" x2="181" y2="142" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+<line x1="346" y1="142" x2="361" y2="142" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#agr)"/>
+<line x1="526" y1="142" x2="569" y2="142" stroke="#3B6D11" stroke-width="1.5" marker-end="url(#agr)"/>
+<text class="tl" x="548" y="134" text-anchor="middle" fill="#3B6D11">pass</text>
+
+<!-- outcomes -->
+<rect x="40" y="300" width="208" height="112" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="0.75"/>
+<text class="th" x="56" y="324" fill="#501313">Categorical RED</text>
+<text class="ts" x="56" y="344" fill="#A32D2D">touched a frozen surface:</text>
+<text class="ts" x="56" y="361" fill="#A32D2D">the metric, the deploy path,</text>
+<text class="ts" x="56" y="378" fill="#A32D2D">its own definition</text>
+<text class="tl" x="56" y="400" fill="#501313">→ operator card</text>
+
+<rect x="276" y="300" width="208" height="112" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.75"/>
+<text class="th" x="292" y="324" fill="#412402">Scored RED</text>
+<text class="ts" x="292" y="344" fill="#854F0B">stacked smells, or left</text>
+<text class="ts" x="292" y="361" fill="#854F0B">its zone. Either the agent</text>
+<text class="ts" x="292" y="378" fill="#854F0B">or the gate is wrong</text>
+<text class="tl" x="292" y="400" fill="#412402">→ blocked signal</text>
+
+<rect x="512" y="300" width="208" height="112" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.75"/>
+<text class="th" x="528" y="324" fill="#2C2C2A">Check failed</text>
+<text class="ts" x="528" y="344" fill="#5F5E5A">clean change that</text>
+<text class="ts" x="528" y="361" fill="#5F5E5A">does not work</text>
+<text class="tl" x="528" y="400" fill="#2C2C2A">→ re-prompt, same session</text>
+
+<path d="M240 226 L240 262 L144 262 L144 297" fill="none" stroke="#A32D2D" stroke-width="1.25" marker-end="url(#ar)"/>
+<path d="M290 226 L290 262 L380 262 L380 297" fill="none" stroke="#854F0B" stroke-width="1.25" marker-end="url(#aa)"/>
+<path d="M444 226 L444 262 L616 262 L616 297" fill="none" stroke="#5F5E5A" stroke-width="1.25" marker-end="url(#ag)"/>
+
+<rect x="40" y="428" width="680" height="34" rx="4" fill="none" stroke="#B4B2A9" stroke-width="0.75" stroke-dasharray="4 4"/>
+<text class="t" x="60" y="450" fill="#2C2C2A">Nothing is just rejected. Every outcome is a re-prompt, a card, or a signal.</text>
+</svg>

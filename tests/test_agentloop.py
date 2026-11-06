@@ -457,22 +457,58 @@ def test_checkout_branch_reads_last_checkout_b():
     ]) == "cursor/second"
 
 
-def test_resolve_uses_claimed_name_when_origin_has_it():
+def test_resolve_uses_claimed_name_when_it_is_the_one_on_origin():
     git = PresentGit({"cursor/planned"})
     assert resolve_origin_branch(
         git, "cursor/planned", [THIS_MORNING]) == "cursor/planned"
-    assert git.fetched == ["cursor/planned"]
+    assert git.fetched == [
+        "cursor/master-wager-senate-capacity-20260821",
+        "cursor/planned",
+    ]
 
 
-def test_resolve_falls_back_to_checkout_when_claimed_is_missing():
+def test_resolve_prefers_checkout_when_claimed_is_missing():
     git = PresentGit({"cursor/master-wager-senate-capacity-20260821"})
     assert resolve_origin_branch(
         git, "cursor/escalated-docket-review-2b1f", [THIS_MORNING]
     ) == "cursor/master-wager-senate-capacity-20260821"
     assert git.fetched == [
-        "cursor/escalated-docket-review-2b1f",
         "cursor/master-wager-senate-capacity-20260821",
     ]
+
+
+def test_resolve_prefers_checkout_when_both_names_are_on_origin():
+    git = PresentGit({
+        "cursor/escalated-docket-review-2b1f",
+        "cursor/master-wager-senate-capacity-20260821",
+    })
+    assert resolve_origin_branch(
+        git, "cursor/escalated-docket-review-2b1f", [THIS_MORNING]
+    ) == "cursor/master-wager-senate-capacity-20260821"
+
+
+def test_resolve_prefers_push_dest_over_checkout():
+    git = PresentGit({"cursor/published"})
+    commands = [
+        "git checkout -b cursor/local-only",
+        "git push -u origin HEAD:cursor/published",
+    ]
+    assert resolve_origin_branch(
+        git, "cursor/spawn-name", commands) == "cursor/published"
+    assert git.fetched == ["cursor/published"]
+
+
+def test_collect_facts_uses_checkout_when_cursor_reported_nothing(repo):
+    evidence = _evidence(
+        branch=None,
+        tool_calls=[{"name": "shell", "args": {"command": THIS_MORNING}}],
+    )
+    facts = collect_facts(
+        evidence, PresentGit({"cursor/master-wager-senate-capacity-20260821"}),
+        "main")
+    assert facts.on_origin
+    assert facts.branch == "cursor/master-wager-senate-capacity-20260821"
+    assert evidence.branch == facts.branch
 
 
 def test_collect_facts_rewrites_branch_to_the_origin_ref(repo):

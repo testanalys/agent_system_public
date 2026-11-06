@@ -177,13 +177,27 @@ def _lifeblood_prefixes(subsystem: str) -> list[tuple[str, str]]:
     return [(bucket, f"{LIFEBLOOD_PREFIX}/{folder}") for folder in gcs_folders(subsystem)]
 
 
-def _metric_chart(rows: list[dict]) -> dict[str, float] | None:
+def _metric_chart(
+    rows: list[dict], *, grain: str | None = None
+) -> dict[str, float] | None:
     series: dict[str, float] = {}
     for row in rows:
         if row.get("status") != "ok":
             continue
         val = row.get("value")
         if not isinstance(val, (int, float)):
+            continue
+        dims = row.get("dims") or {}
+        row_grain = grain or dims.get("grain")
+        if row_grain == "session":
+            sid = str(dims.get("session_id") or "")
+            key = sid if sid else None
+            if key is None:
+                try:
+                    key = datetime.fromisoformat(row["ts"]).date().isoformat()
+                except (KeyError, ValueError, TypeError):
+                    continue
+            series[key] = float(val)
             continue
         try:
             day = datetime.fromisoformat(row["ts"]).date().isoformat()
@@ -196,25 +210,22 @@ def _metric_chart(rows: list[dict]) -> dict[str, float] | None:
 
 
 def _subsystem_pulse(subsystem: str, preferred: tuple[str, ...], days: int = 14) -> dict[str, Any]:
-    available = list_lifeblood_metrics(subsystem)
-    chosen = [m for m in preferred if m in available][:3]
-    if not chosen:
-        chosen = available[:3]
     catalogue = load_lifeblood_catalogue(subsystem)
     pulses = []
-    for metric_id in chosen:
+    for metric_id in preferred[:3]:
         series = load_lifeblood_series(subsystem, metric_id, days=days)
-        chart = _metric_chart(series)
         last = series[-1] if series else {}
         entry = metric_entry(catalogue, metric_id)
+        grain = (last.get("dims") or {}).get("grain")
         pulses.append({
             "id": metric_id,
             "name": entry.get("name") or metric_id,
             "last": last,
-            "chart": chart,
+            "chart": _metric_chart(series, grain=grain),
             "help": metric_help(entry, last),
             "n": len(series),
         })
+    available = list_lifeblood_metrics(subsystem)
     return {"metrics": pulses, "available": len(available)}
 
 
@@ -225,12 +236,41 @@ def _render_metric_extras(metric_id: str, last: dict) -> None:
         if rows:
             st.dataframe(rows, hide_index=True, use_container_width=True)
         return
+    if metric_id == "indexed_24h":
+        by_source = dims.get("by_source") or {}
+        if by_source:
+            st.caption("Indexed in the last 24 hours by source table.")
+            st.dataframe(
+                [{"source": k, "indexed_24h": v} for k, v in by_source.items()],
+                hide_index=True,
+                use_container_width=True,
+            )
+        return
     if metric_id == "audio_per_tool":
         per_tool = dims.get("per_tool") or {}
         if per_tool:
-            st.caption("Unique 28d yield by tool (repeats excluded). agent_rd is not in the mean.")
+            n_tools = dims.get("layer_tools") or len(per_tool)
+            layer_ops = dims.get("layer_ops")
+            st.caption(
+                f"Mean across {n_tools} registered harvesters"
+                + (f" · {layer_ops} mechanical ops in 24h" if layer_ops is not None else "")
+                + ". Zeros included. agent_rd is shown, not averaged in."
+            )
             st.dataframe(
-                [{"tool": k, "unique_ops_28d": v} for k, v in per_tool.items()],
+                [{"harvester": k, "unique_queued": v} for k, v in per_tool.items()],
+                hide_index=True,
+                use_container_width=True,
+            )
+        return
+    if metric_id == "discovery_yield":
+        per = dims.get("per_harvester") or {}
+        if per:
+            st.caption(
+                f"{dims.get('still_pending', '?')} still pending · "
+                f"{dims.get('already_ingested', '?')} already ingested"
+            )
+            st.dataframe(
+                [{"harvester": k, "unique_queued_24h": v} for k, v in per.items()],
                 hide_index=True,
                 use_container_width=True,
             )
@@ -251,10 +291,10 @@ def _render_story(rows: list[dict], subs: list[str]) -> None:
     )
     landings = landing_stats(rows)
     discovery = _subsystem_pulse(
-        "discovery", ("discovery_yield", "session_yield", "audio_per_tool")
+        "discovery", ("discovery_yield", "audio_per_tool", "harvest_pulse")
     )
     pipeline = _subsystem_pulse(
-        "pipeline", ("funnel_snapshot", "backlog_depth", "dispatch_pulse")
+        "pipeline", ("indexed_24h", "backlog_depth", "dispatch_pulse")
     )
 
     waiting = counts["open"] + counts["incomplete"] + counts["escalations"]
@@ -303,7 +343,7 @@ def _render_story(rows: list[dict], subs: list[str]) -> None:
                     st.line_chart(item["chart"])
 
     if pipeline["metrics"] and ("pipeline" in subs):
-        st.markdown("**Pipeline funnel**")
+        st.markdown("**Pipeline pulse**")
         cols = st.columns(len(pipeline["metrics"]))
         for col, item in zip(cols, pipeline["metrics"]):
             with col:
@@ -421,7 +461,7 @@ def _live_body(subsystem: str, limit: int) -> None:
             samples = {}
             for sub in subs:
                 preferred = {
-                    "discovery": "session_yield",
+                    "discovery": "discovery_yield",
                     "pipeline": "backlog_depth",
                 }.get(sub)
                 if not preferred:
@@ -466,7 +506,9 @@ def _live_body(subsystem: str, limit: int) -> None:
                     if note:
                         st.caption(note)
                     _render_metric_extras(metric_id, show)
-                    chart = _metric_chart(series_rows)
+                    chart = _metric_chart(
+                        series_rows, grain=(show.get("dims") or {}).get("grain")
+                    )
                     if chart:
                         st.line_chart(chart)
 

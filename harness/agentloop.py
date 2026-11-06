@@ -163,6 +163,10 @@ _CHECKOUT = re.compile(
     r"\bgit(?:\s+-C\s+\S+)?\s+(?:checkout\s+-b|switch\s+-c)\s+(\S+)",
     re.IGNORECASE,
 )
+_PUSH = re.compile(
+    r"\bgit(?:\s+-C\s+\S+)?\s+push\b([^;&\n]*)",
+    re.IGNORECASE,
+)
 
 
 def checkout_branch(commands: list[str]) -> str | None:
@@ -176,6 +180,61 @@ def checkout_branch(commands: list[str]) -> str | None:
     return name
 
 
+def _clean_ref(name: str | None) -> str | None:
+    if not name:
+        return None
+    name = name.strip().strip("'\"")
+    if name.lower().startswith("refs/heads/"):
+        name = name[len("refs/heads/"):]
+    if name.lower().startswith("origin/"):
+        name = name[len("origin/"):]
+    if not name or name.startswith("-") or name in {".", "HEAD", "head"}:
+        return None
+    return name
+
+
+def pushed_branches(commands: list[str]) -> list[str]:
+    """Dest refs from ``git push``, in the order the VM ran them."""
+    names: list[str] = []
+    for command in commands:
+        for match in _PUSH.finditer(command):
+            tokens = [t.strip("'\"") for t in match.group(1).split()
+                      if t and not t.startswith("-")]
+            dest = None
+            if len(tokens) >= 2:
+                spec = tokens[1]
+                dest = spec.split(":")[-1] if ":" in spec else spec
+            elif len(tokens) == 1 and tokens[0] not in {"origin", "upstream"}:
+                dest = tokens[0]
+            if dest:
+                names.append(dest)
+    return names
+
+
+def session_branch_candidates(claimed: str | None,
+                              commands: list[str]) -> list[str]:
+    """Names this session may have published, strongest first.
+
+    Origin is the authority. Cursor's create-time name is only a hint.
+    A push dest beats checkout -b beats the API name.
+    """
+    checkout = _clean_ref(checkout_branch(commands))
+    out: list[str] = []
+
+    def add(name: str | None) -> None:
+        if (name or "").upper() == "HEAD":
+            name = checkout
+        name = _clean_ref(name)
+        if name and name not in out:
+            out.append(name)
+
+    for raw in reversed(pushed_branches(commands)):
+        add(raw)
+    add(checkout)
+    add(claimed)
+    return out
+
+
 def _on_origin(git: GitPort, branch: str) -> bool:
     try:
         git.fetch(branch)
@@ -184,22 +243,39 @@ def _on_origin(git: GitPort, branch: str) -> bool:
         return False
 
 
-def resolve_origin_branch(git: GitPort, claimed: str,
+def _fetch_any(git: GitPort, branches: list[str]) -> str:
+    """Wait until any candidate is on origin."""
+    waiter = getattr(git, "fetch_until_any", None)
+    if callable(waiter):
+        return waiter(branches)
+    last: Exception | None = None
+    for name in branches:
+        try:
+            git.fetch(name)
+            return name
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+    raise RuntimeError(
+        f"none of {branches!r} on origin: {last}"
+    ) from last
+
+
+def resolve_origin_branch(git: GitPort, claimed: str | None,
                           commands: list[str]) -> str:
     """Origin ref that holds this run.
 
-    Cursor names an auto-branch at spawn. The VM may ``checkout -b``
-    something else and push that. Ask origin for the claimed name; if it
-    is not there, ask for the checkout. Wait only after that choice.
+    Cursor assigns a name at create. That is a reservation, not a
+    published ref. The VM often checkout -b a different name and pushes
+    that. Ask origin which of the names this session mentioned exist;
+    prefer push dest, then checkout, then the API name. Wait on the set.
     """
-    if _on_origin(git, claimed):
-        return claimed
-    other = checkout_branch(commands)
-    if other and other != claimed and _on_origin(git, other):
-        return other
-    name = other or claimed
-    fetch_branch(git, name)
-    return name
+    candidates = session_branch_candidates(claimed, commands)
+    if not candidates:
+        raise RuntimeError("no branch name from Cursor or the VM")
+    for name in candidates:
+        if _on_origin(git, name):
+            return name
+    return _fetch_any(git, candidates)
 
 
 # ═════════════════════════════════════════════════════════════ facts / dispose
@@ -227,18 +303,19 @@ def collect_facts(evidence: AgentEvidence, git: GitPort,
     """Observe. Do not classify."""
     error = evidence.crash_detail() or None
     tools = tuple(sorted(evidence.tools_named()))
+    commands = evidence.shell_commands()
     claimed = evidence.branch
-    if not claimed:
+    candidates = session_branch_candidates(claimed, commands)
+    if not candidates:
         return TurnFacts(
             status=evidence.status, error=error, branch=None,
             on_origin=False, diff=None,
             result_text=evidence.result_text, tool_names=tools)
     try:
-        branch = resolve_origin_branch(git, claimed, evidence.shell_commands())
+        branch = resolve_origin_branch(git, claimed, commands)
     except Exception as exc:  # noqa: BLE001
-        waited = checkout_branch(evidence.shell_commands()) or claimed
         return TurnFacts(
-            status=evidence.status, error=error, branch=waited,
+            status=evidence.status, error=error, branch=candidates[0],
             on_origin=False, diff=None,
             result_text=evidence.result_text, tool_names=tools,
             fetch_error=f"{type(exc).__name__}: {exc}")

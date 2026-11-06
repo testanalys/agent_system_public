@@ -1,356 +1,359 @@
-# Turnstile
+# Outer Harness
 
-<!-- Once pushed, uncomment and replace <you> with your GitHub username:
-[![tests](https://github.com/<you>/turnstile/actions/workflows/tests.yml/badge.svg)](https://github.com/<you>/turnstile/actions/workflows/tests.yml)
--->
+**Let the model lab own the agent loop. Own the merge.**
 
-A system-level harness for coding agents. It runs outside the agent's CLI,
-waits for the session to finish, reads everything the agent did, and decides
-what merges.
+This README explains a harness framework for running a fleet of agents
+that maintain production code **sustainably**: the system improves itself
+on its own, does not break while doing it, and grows the thing it
+maintains toward its goals.
 
-Built to run and scale [regest.ai](https://regest.ai).
+![The loop](docs/img/the-loop.svg)
 
----
+Built to run and scale [regest.ai](https://regest.ai): a data pipeline and
+search API maintained by agents, in production.
 
-## The problem
-
-Agentic systems that can change the code they operate within, with minimal or
-no human in the loop, suffer technical debt from introduced complexity
-compounding over time.
-
-The cause is behavioural. Agents have a propensity toward action. That
-propensity feeds confirmation bias and crowds out the restrained moves —
-inaction, deleting code, simplifying a design, scaling an ambition back. Ask a
-good engineer to fix something and the answer is sometimes a smaller system.
-Ask an agent and the answer is almost always more code.
-
-This is hard to catch because every individual change is defensible. The
-failure only exists in aggregate.
+| | The idea | In one line |
+|---|---|---|
+| 1 | [Why not constrain inside the agent harness](#1-why-not-constrain-inside-the-agent-harness) | Constraints placed there get worked around, or edited. |
+| 2 | [The outer harness: the provider owns the loop, we own the turn boundary](#2-the-outer-harness-the-provider-owns-the-loop-we-own-the-turn-boundary) | One layer constrains everything, so agents can loop freely. |
+| 3 | [Source control is the control plane. A merge is a deploy.](#3-source-control-is-the-control-plane-a-merge-is-a-deploy) | The classifier is the only path to production. |
+| 4 | [Everything becomes a signal](#4-everything-becomes-a-signal) | Deterministic output and agent output both start agents. |
+| 5 | [The gate's mistakes are data](#5-the-gates-mistakes-are-data) | RED verdicts tell you whether the gate itself is right. |
 
 ---
 
-## Existing solutions
-
-Current approaches to constraining agent behaviour work inside the agent
-harness: the CLI infrastructure wrapped around the model loop. Slash commands,
-hooks, MCP servers, subagents, rules files. It is what lets an agent interact
-mechanically with its environment.
+## 1. Why not constrain inside the agent harness
 
 ![The layers of an agent harness](docs/img/harness-layers.svg)
 
-You can constrain from there, and it would be wrong to pretend otherwise. A
-hook is a script that fires on a trigger, so you can set a trap: when the agent
-reaches for a tool it should not be reaching for, block the call and re-prompt.
-That is real, deterministic constraint.
+Model labs have built very good agent harnesses: the CLI layer (Cursor,
+Claude Code, Codex) around the model loop. Slash commands, hooks, MCP
+servers, subagents, rules files. It is what lets an agent act on a
+codebase over many turns.
 
-It is just a poor place to *guarantee* it. A tool call is a weak proxy for a
-behaviour — what you want to constrain is a disposition, and one tool call
-rarely represents one. Traps get walked around, because blocking one route to
-an outcome leaves the others open, and the trap set becomes its own
-maintenance burden. And all of it lives where the agent lives: hook config,
-rules files, skills and subagent definitions sit in the repository the agent
-is working in, so an agent with write access to the repo has write access to
-its own constraints.
+The obvious place to constrain an agent is in there. A hook is a script
+that fires on a trigger, so you can set a trap: when the agent reaches for
+a tool it should not, block the call and re-prompt. That is real,
+deterministic constraint. It is a poor place to *guarantee* it:
+
+- **Agents work around constraints.** Block one route to an outcome and a
+  capable agent finds another. Every trap you add is one more path to
+  route around, and the trap set becomes its own maintenance burden.
+- **A tool call is a weak proxy for a behaviour.** What you want to stop
+  is a disposition, like widening a metric or keeping a dead code path
+  alive. One tool call rarely shows it.
+- **The constraints live where the agent lives.** Hook config, rules files
+  and skills sit in the repo the agent is editing. An agent with write
+  access to the repo has write access to its own limits.
+- **It fights the provider's loop.** Every interruption mid-run trades
+  away some of what makes the loop good.
 
 ---
 
-## Constraining at the turn boundary
+## 2. The outer harness: the provider owns the loop, we own the turn boundary
 
-Wait until the session ends and the picture inverts. You hold the full net
-diff, every tool call the agent made, and the prose it wrote in its own
-docstrings. Behaviour is legible in aggregate in a way it never is at any
-single point mid-run, because by then the pattern has finished happening.
+![They own the loop, we own the boundary](docs/img/turn-boundary-timeline.svg)
 
-The trade is honest. You let the session run to completion, so the tokens are
-spent either way. In exchange you stop over-engineering constraint into the
-agent layer, and you guard against behaviour rather than a proxy for it.
+So leave the agent harness exactly as it ships. Each agent runs a
+multi-turn session in the provider's harness, on its own VM, against a
+fresh clone, with sandbox servers to test against. Nothing interrupts it.
 
-Use the agent harness to extend what an agent can reach. Use an outer system
-harness to constrain it. This repo is that outer layer.
+All the constraint lives in **one layer outside it: a classifier that
+judges the session at the turn boundary**, after it ends, and decides
+whether the work reaches production.
+
+- **One layer constrains every agent, so every agent can loop freely.**
+  Inside the session the agent may try anything, retry anything, take any
+  route. None of it matters until the boundary, and the boundary is the
+  only way out.
+- **Workarounds stop being a problem.** An agent can route around a hook.
+  It cannot route around a judge that only reads the finished result. Any
+  route it took ends in the same diff.
+- **Judge the behaviour, not a proxy for it.** Mid-run you see one tool
+  call. At the boundary you hold the net diff, every tool call and the
+  prose the agent wrote. A pattern is only visible once it has finished.
+- **Don't compete with the labs on the inner loop.** They will improve it
+  faster than you can, and every release is free. Build what they can't:
+  the layer that knows your repo and your production.
+- **The trade is honest.** The session runs to completion, so the tokens
+  are spent either way. In exchange you stop over-engineering constraint
+  into the agent layer.
+
+### Judge the session, not the tool call
+
+One session, scored. This is real output from `classify.py`.
+
+![What the agent said, and what the harness measured](docs/img/turn-boundary.svg)
+
+Nothing the agent said was false. The yield gap was real, the fix worked,
+the tests passed. It still scored 409 against a threshold of 100: it widened
+the definition of the metric it was graded on, kept the old behaviour alive
+behind a new flag, added a file whose name was 0.9 similar to its neighbour,
+and its docstring hedged while the code committed.
+
+Every one of those is defensible alone. Together they are a shape, and the
+shape is the finding. No hook sees this.
+
+### Publishing the exam
+
+Publish the questions and an exam stops measuring competence.
+
+No prompt in this system contains a zone name, a path list, a tier or a
+limit. An agent gets a role, a goal, data and tools. Rules surface only when
+a change trips one. An agent told what it may change optimises for what is
+permitted rather than what is correct. A linter enforces this on every
+composed prompt.
+
+---
+
+## 3. Source control is the control plane. A merge is a deploy.
+
+![The merge gate](docs/img/merge-gate.svg)
+
+- **Humans already gate production through git.** Agents get the same
+  control plane, with a deterministic reviewer in place of a human. Main is
+  what production builds from, so the merge gate *is* the production gate.
+- **Autonomy is set per agent, not per system.** A narrow repair agent
+  auto-merges inside one small zone. A master has a wide remit and pays less
+  for size, but no agent can touch a frozen surface.
+- **No zone without an acceptance check.** A zone declared without one
+  refuses to load. Merge rights with no way to tell whether the change
+  worked is the failure this system exists to prevent.
+- **Nothing is just rejected.** Every verdict is a re-prompt, an operator
+  card, or a signal.
+
+### The scorecard
+
+Most of it is not about bugs. Tests catch bugs. It is about the ways a
+change can be locally correct and structurally corrosive.
+
+| Family | Catches |
+| --- | --- |
+| **Shape** (`C*`) | files touched, net lines, new dependencies, new config keys, nesting, near-duplicate filenames |
+| **History** (`H1`–`H4`) | churn on a file, repeat edits to one region, recurring signatures, restoring something removed |
+| **Habits** (`H-*`) | stubs, dual paths, commented-out code, swallowed exceptions, dropped assertions, hardcoded success |
+| **Narration** (`N-*`) | added prose that defers, minimises, over-claims, or contradicts the code it documents |
+| **Conjunctions** (`J-*`) | combinations worse than their parts: a stub with a TODO, a dual path with a new flag |
+
+- **Size alone is never fatal.** A clean large change scores about 32 and
+  merges. Otherwise agents learn to make small bad changes.
+- **Stacked smells are.** One rough edge is engineering. Four in one
+  session is a disposition.
+- **The metric an agent is graded on is not a metric it may redefine.** An
+  agent asked to raise a number will, given the chance, redefine the
+  number. It is the shortest path.
+- **Prices are role-scaled.** A repair agent pays 1.3× on habits, a master
+  0.7×. Same rules, different tolerance.
+
+### Zoning
+
+Cities do not grow by consensus and they do not grow at random.
+Infrastructure is laid first, and everything else adapts around it. Zoning
+is not there to stop building. It is there so that building does not
+destroy what makes building possible.
+
+A zone map does the same: some paths are open, some are frozen. The frozen
+ones are what everything else depends on: the instruments that measure the
+work, the deploy path, the definitions of the agents themselves. Zone maps
+live in the harness repo, not the repo they govern.
+
+### A gate is a re-prompt, not a rejection
+
+Every verdict is written back into the agent's context: what fired, why it
+cannot be reshaped into a merge, and what to do with the work instead.
+
+> No agent merges changes here — not because your change is wrong, but
+> because a system that can rewrite its own limits has none. [...] A
+> proposal against the protected surface is an argument about the
+> architecture, and it will be read as one. So argue it.
+>
+> If, while writing that, you find the answer is "nothing much" — say so
+> and withdraw. That is a real outcome and it is recorded as one.
+
+A blocked change that was the *right* change is the most valuable thing
+this system produces: an argument about the architecture with a working
+diff attached. Withdrawal is a recorded success, because an agent that can
+only succeed by shipping will always ship.
+
+---
+
+## 4. Everything becomes a signal
+
+![Two loops, one gate](docs/img/two-loops.svg)
+
+Nothing in this system is scheduled except the production code itself.
+Agents are not started on a timer. They are started by signals, and almost
+everything is one.
+
+- **Everything deterministic emits signals.** The production job runs and
+  leaves evidence: failures, metric drift, outputs a review agent flags as
+  wrong. Agents watch those signals instead of watching the system.
+- **Everything an agent produces is a signal for another agent.** A review
+  agent's finding starts a repair agent. A repair agent's RED branch is
+  evidence for a master. A master's fix is checked by the next production
+  run and the review agents after it.
+- **The same branch escalates.** Work is not thrown away when a narrow
+  agent fails. It moves up to an agent with a wider remit, and then to a
+  person:
+
+```
+production run ─▶ signal ─▶ narrow agent ─▶ branch ─▶ gate ─▶ merge, rebuild
+                                               │ RED
+                                               ▼
+                                 wider agent, same branch ─▶ gate ─▶ merge, rebuild
+                                               │ frozen surface
+                                               ▼
+                                            a person
+```
+
+- **Code decides who wakes.** Which agent starts, and what it is handed,
+  comes from fixed rules over the signals. The same signals always produce
+  the same brief, so every run can be replayed.
+- **Done means the signal stopped.** A merge marks the signals it fixed.
+  If the problem comes back, the same fingerprint reopens the old signal
+  with its history. No agent marks its own work done.
+- **Cost scales with problems, not time.** An agent runs because something
+  happened. A quiet day costs nothing.
+
+### Agents get scarcer as they get more powerful
+
+Narrow agents run often, in parallel, and hold real merge rights inside
+one small zone. Wide agents run only when a pattern of signals calls for
+them, and their reach stops at the frozen surface, which goes to a person.
+
+### Homeostasis
+
+A body regulates on deviation and rate of change, not absolute values.
+Every brief carries a metric as a level, a 7-day delta and a 28-day delta.
+An agent that sees `0.31` fixes today. An agent that sees `0.31, down from
+0.62 a month ago, falling steadily` asks a better question.
+
+### Replication over citation
+
+A research field fails when nobody re-runs the first study. An agent system
+fails the same way, faster: agent one writes a summary, agent two reads the
+summary instead of the code. So there are no context handoffs and no
+agent-written memory files. Agents read the code, the raw logs, the full
+diffs and their own metrics with history. Primary sources only.
+
+---
+
+## 5. The gate's mistakes are data
+
+- **A scored RED means the agent was wrong, or the gate was.** One verdict
+  cannot tell you which. A master reading fifty of them can.
+- **Our own numbers forced this.** Reviewing 662 runs: **38% of REDs were
+  an agent writing a test next to an otherwise green change**. The zone map
+  was too narrow, not the agents. Masters woken on each RED redid the work
+  and sent 55 of 58 to a person anyway.
+- **So REDs stopped waking masters one at a time.** They accumulate as
+  signals, and Master (Agents) wakes on the pattern.
+- **The gate can be retuned, never loosened.** Every proposed change to a
+  zone map or weight is replayed over every stored branch first.
+
+### The replay oracle
+
+Every classification stores its diff, agent, verdict and outcome. A
+proposed gate change re-classifies the whole corpus. Nothing is re-merged.
+It passes only if:
+
+- every **categorical RED stays RED**: the fence cannot move
+- every **merged GREEN stays below RED**: accepted work stays acceptable
+- every **synthetic bad change stays RED**: `tests/test_design_subversion.py`
+
+The benefit is reported, not required: the false positives that would now
+merge. Master (Agents) can edit the zone maps and weights. It cannot edit
+the classifier engine, the replay oracle, or its own definition.
+
+---
+
+## See it run
+
+```bash
+python demo/simulate.py
+```
+
+Four ticks of the loop in a throwaway git repo. The classifier, zone map,
+acceptance checks, wake rules and replay oracle are the real code. The agent
+sessions are scripted diffs, so it is deterministic and needs no API key.
+The harness only ever sees the branch a session leaves, so from its side
+nothing is different.
+
+```
+-- tick 1 ------------------------------------------------------------
+  review       dq_issue [high  ] attribution: short turns have no speaker  new
+  session      repair-attribution -> branch fix-short-turns-1
+  gate         RED 100  signals: Z1                      test file outside the zone
+  session      repair-ingest -> branch coverage-counts-unknown
+  gate         RED 115  signals: R-instruments, C13      redefined its own metric
+               protected surface -> operator card
+-- tick 2 ------------------------------------------------------------
+  gate         RED 162  signals: C7, H-DUAL-PATH, N-DEFER, J-DUAL-KEY ...
+               Master (DQ)      WAKE  pressure 12 >= 12
+  gate         GREEN   0  -> MERGED 7f3cb5c
+  rebuild      production rebuilt from main @ 7f3cb5c
+               Master (Agents)  WAKE  3 blocked branches
+  replay       re-classified 5 stored branches under the proposed map
+               categorical REDs still RED, merged GREENs still GREEN: yes
+               benefit: 2 false positive(s) would now merge
+  gate         MERGED zone map change. The gate just improved itself.
+-- tick 3 ------------------------------------------------------------
+  review       dq_issue [medium] ingest: timestamps drift  REOPENED - fix 7f3cb5c did not hold
+  session      repair-ingest -> branch dedupe-2         same change that was blocked in tick 2
+  gate         GREEN   0  -> MERGED d380885
+```
 
 ---
 
 ## What is in this repo
 
 ```
-harness/
-  classify.py       the only thing that assigns a status
-  scorecard/        the rules — shape, history, habits, narration, conjunctions
-  skeleton.py       zone maps; a zone without an acceptance check refuses to load
-  diff.py           net session diff and its shape signals
-  history_signals.py  churn, region churn, recurrence, oscillation
-  reprompts.py      what gets written back into the agent's context
-  triggers.py       when a supervising agent is warranted
-  oracle_kit/       acceptance checks
-  cursor_rest.py    agent transport (REST, stdlib only)
-  agentloop.py      spawn, adjudicate, re-prompt
+loop/                  the closed loop (compact reference version)
+  signals.py           what a run leaves behind; fingerprints; reopen on recurrence
+  classes.py           review, repair, task, master
+  wake.py              deterministic wake rules and docket ranking
+  gate.py              classify -> check -> merge -> rebuild, or a signal
+  replay.py            how a change to the gate is judged
+demo/simulate.py       the loop end to end, with the real classifier
 
-roles/              who the agents are: prompt composition and credential scope
-skeletons/          the zone maps, one per subsystem
-config/             the reference data you edit — repos, branches, identity
-examples/           a working subsystem, so a fresh clone runs green
-reconciler/         the scheduled tick
-dashboard/          operator view: timeline, metrics, escalations
-cloud/              one execution, one agent, start to finish
+harness/               the outer harness
+  classify.py          the only thing that assigns a status
+  scorecard/           the rules and their prices, in one place
+  skeleton.py          zone maps; a zone without an acceptance check refuses to load
+  diff.py              net session diff and its shape signals
+  reprompts.py         what gets written back into the agent's context
+  cursor_rest.py       agent transport (REST, stdlib only)
+  agentloop.py         spawn, wait for the boundary, adjudicate, re-prompt
+
+roles/                 who the agents are: prompt composition and credential scope
+skeletons/             zone maps, one per subsystem
+reconciler/            the scheduled tick
+cloud/                 one execution, one agent, start to finish
+dashboard/             operator view
 ```
 
-Three things carry the design.
-
-`classify.py` is the only function that assigns a status to an agent's work.
-Agents never label their own output. It takes a diff and returns a tier, a
-score, and the list of signals that fired.
-
-`scorecard/` holds the rules and their prices. Every signal is worth a number.
-The numbers live in one file so they can be retuned in one place.
-
-`skeletons/` are the zone maps: which paths an agent may write, which are
-frozen, and which acceptance check has to pass before anything merges. They
-live here, in a repository the agents never clone.
-
-See [INSTRUCTIONS.md](INSTRUCTIONS.md) to run this against your own system.
-
----
-
-## What implementing this brings
-
-### Judge the session, not the tool call
-
-One session, scored. The scorecard below is real output from `classify.py` in
-this repo.
-
-![What the agent said, and what the harness measured](docs/img/turn-boundary.svg)
-
-Nothing the agent said was false. The yield gap was real, the fix worked, the
-tests passed.
-
-It still scored 409 against a threshold of 100, because of what it did on the
-way there. It widened the definition of the metric it was being graded on. It
-kept the old behaviour alive behind a new environment flag rather than
-choosing. It added a file whose name was 0.9 similar to the one beside it. And
-its docstring hedged while the code committed to the change as settled.
-
-Every one of those is defensible alone. Together they are a shape, and the
-shape is the finding.
-
-No hook sees this. A hook fires on a tool call, and a tool call cannot tell you
-that a filename resembles its neighbour, or that prose and code disagree about
-how finished something is.
-
-### Design subversion is what is worth catching
-
-Most of the scorecard is not about bugs. Tests catch bugs. It is about the ways
-a change can be locally correct and structurally corrosive.
-
-| Family | Catches |
-| --- | --- |
-| **Shape** (`C*`) | files touched, net lines, new dependencies, new config keys, nesting depth, near-duplicate filenames, directory crowding |
-| **History** (`H1`–`H4`) | churn on a file, repeat edits to one region, recurring signatures, restoring something previously removed |
-| **Habits** (`H-*`) | stubs, dual paths, commented-out code, swallowed exceptions, dropped assertions, `noqa`, functions that return a hardcoded success |
-| **Narration** (`N-*`) | added prose that defers, minimises, over-claims, or contradicts the body it documents |
-| **Conjunctions** (`J-*`) | combinations worse than their parts — a stub with a TODO, a dual path with a new flag, a weakened oracle |
-
-Two rules shape how they combine.
-
-**Size alone is never fatal.** A clean, large change scores around 32 and
-merges. If it were otherwise, agents would learn to make small bad changes.
-
-**Stacked smells are.** Three mild signals plus a conjunction bonus reaches
-100. One rough edge under time pressure is engineering. Four in one session is
-a disposition.
-
-The most useful rule turned out to be the simplest: **the metric an agent is
-graded on is not a metric it may redefine.** An agent asked to raise a number
-will, given the chance, redefine the number. That is not dishonesty. It is the
-shortest path, and agents take the shortest path.
-
-Prices are role-scaled. An investigator pays 1.3× on habits; a supervising
-agent with a wider remit pays 0.7×. Same rules, different tolerance.
-
-### Zoning
-
-Cities do not grow by consensus and they do not grow at random. Infrastructure
-is laid down first — water, rail, power — and everything else adapts around it.
-Zoning is not there to stop building. It is there so that building does not
-destroy the thing that makes building possible.
-
-A zone map is the same instrument. Some paths are open, some are frozen, and
-the frozen ones are frozen because they are what the rest depends on: the
-instruments that measure the work, the deploy path, the definitions of the
-agents themselves.
-
-Every open zone declares an acceptance check, and a zone without one refuses to
-load. Granting merge rights with no way to tell whether the change worked is
-the exact failure this system exists to prevent, so it is unrepresentable
-rather than discouraged.
-
-Zone maps live in this repository, not in the repository they govern. An agent
-working in a checkout cannot widen its own permissions, because the file that
-would need editing was never cloned.
-
-### Publishing the exam
-
-Publish the questions and an exam stops measuring competence. It measures
-recall of the questions.
-
-No prompt in this system contains a zone name, a path list, a tier or a limit.
-An agent gets a role, a goal, data and tools, and works how it judges best.
-Rules surface only when a change actually trips one.
-
-An agent told what it may change optimises for what is permitted rather than
-for what is correct. You get compliance and lose the signal. A linter enforces
-this on every prompt, and a test asserts it against every composed prompt from
-the same vocabulary list, so the two cannot drift apart.
-
-### A gate is a re-prompt, not a rejection
-
-Nothing here just says no. Every verdict writes back into the agent's context:
-what fired, why this cannot be reshaped into a merge, and what to do with the
-work instead.
-
-From the run above:
-
-> No agent merges changes here — not because your change is wrong, but because
-> a system that can rewrite its own limits has none.
->
-> Do not try to reshape this into something that merges. There is no size of
-> diff that makes it merge, and attempting one wastes the session.
->
-> [...] A proposal against the protected surface is an argument about the
-> architecture, and it will be read as one. So argue it.
->
-> If, while writing that, you find the answer is "nothing much" — say so and
-> withdraw. That is a real outcome and it is recorded as one, not as a failure.
-
-A blocked change that was the *right* change is the most valuable thing this
-system produces: a fully-formed argument about the architecture with a working
-diff attached. So the gate asks for the argument rather than discarding the
-work.
-
-Making withdrawal a recorded success matters more than it looks. An agent that
-can only succeed by shipping will always ship.
-
-### Replication over citation
-
-A research field fails in a specific way. A study is wrong. Nobody re-runs it,
-because re-running is expensive and the result is already in the literature.
-A decade of work builds on top. The error is not in any paper after the first —
-it is in the shared premise nobody went back to check.
-
-We talk about an agent as one worker with a long memory. It is not. Each
-context window is a new one. That makes an agent system less like an employee
-and more like a field: different people, working in sequence, each building on
-what the last one wrote down. And it fails the same way, faster. Agent one
-writes a summary. Agent two reads the summary instead of the code. Agent three
-reads a summary of the summary.
-
-So there are no context handoffs here, and no agent-written memory files. An
-agent gets the code, the raw logs, and its own metrics with their history. To
-find out what a previous agent did, it searches the full diffs and the raw
-sessions. Those are primary sources. A summary is not.
-
-### Homeostasis
-
-A body does not regulate on absolute values. It regulates on deviation and rate
-of change. A doctor reading one blood pressure knows almost nothing; the same
-reading against a year of them is a diagnosis.
-
-Every brief carries a metric as a level, a 7-day delta and a 28-day delta.
-Never a bare number.
-
-An instantaneous metric produces incident response. An agent that sees `0.31`
-fixes today. An agent that sees `0.31, down from 0.62 a month ago, falling
-steadily` asks a different question, and it is usually the better one.
-
-The history is durable and lives outside the container that computed it. A
-container's filesystem does not survive the run, and local history would make
-every delta empty.
-
-<!-- Drop a screenshot at docs/img/dashboard.png, then uncomment the line below.
-     Left commented so the README never renders a broken image.
-![Operator dashboard](docs/img/dashboard.png)
--->
-
-*In use scaling [regest.ai](https://regest.ai) — a semantic search engine over
-the spoken record.*
-
-### The cost shape
-
-Every always-on agent behaviour has a recurring token cost. So a design is only
-approved here with an answer to one question: **what does cost scale with?**
-
-"Scales with wall-clock" is a rejected shape. A monitoring agent that watches a
-run costs money for every minute the run takes, and most of those minutes are
-quiet. Worse, its context grows as it watches, so the bill is dominated by
-re-reading what it already knows.
-
-Everything here is trigger-fired. An agent starts because a specific number
-crossed a specific threshold, so cost scales with the number of real problems
-rather than with elapsed time. A tick costs seconds whether or not agents are
-running, and nothing long-lived is hosted.
-
-### Agents get scarcer as they get more powerful
-
-Three tiers, with the sampling rate inversely proportional to the blast radius.
-
-| Tier | Runs | Authority |
-| --- | --- | --- |
-| **Investigator** | on every breach, many in parallel | one zone, auto-merges behind an acceptance check |
-| **Retro** | once per cycle, including quiet ones | reviews the cycle and the investigators; proposes |
-| **Supervisor** | only when a trigger fires | wide remit, reads the system's own records, output goes to a human |
-
-The cheap, narrow, frequent agents hold real merge authority in a small space.
-The expensive, wide, rare one holds none — it produces arguments, and a person
-approves them.
-
----
+`harness/` is the production classifier. `loop/` is a compact, stdlib-only
+version of the reconciler and masters: the production versions read from a
+Postgres issue table and an object store and start Cursor cloud agents.
 
 ## Using this on something else
 
-The mechanism does not know what your system does. What it knows about your
-system lives in three places, all of them data rather than code:
+The mechanism does not know what your system does. What it knows lives in
+three places, all of them data:
 
-- **a zone map** — which paths are open, which are frozen, and what has to pass
+- **a zone map**: which paths are open, which are frozen, what must pass
   before a change merges
-- **role definitions** — one markdown file per agent, parsed by a parser that
-  can only produce strings and never imports
-- **acceptance checks** — one command per zone that returns non-zero when the
+- **role definitions**: one markdown file per agent
+- **acceptance checks**: one command per zone that exits non-zero when the
   change did not work
 
-Point those at a different repository and the classifier, the scorecard and the
-re-prompt loop work unchanged.
-
-The couplings you would need to replace are the agent transport (Cursor Cloud
-Agents over REST), the object store, and the job runner. The scorecard has
-none — it needs a git repository and nothing else.
-
----
-
-## Running it
-
-```bash
-pip install -e . && python -m pytest -q
-```
-
-No dependencies, standard library only. 239 tests, green on a fresh clone
-against the bundled example subsystem.
-
-Then point it at any git repository. Copy `docs/example-skeleton.json` in as
-`skeleton.json`, edit the zones, and classify your own last commit:
-
-```bash
-harness --agent your-agent classify --base HEAD~1
-```
-
-You get the tier, the score, and every signal that fired. Exit code is 0 on
-green and non-zero otherwise, so it drops into CI as-is.
-
-Full setup in [INSTRUCTIONS.md](INSTRUCTIONS.md).
-
----
+Point those at another repository and the classifier, scorecard and
+re-prompt loop work unchanged. The scorecard needs a git repository and
+nothing else.
 
 ## What this is, and is not
 
-It is a working system, in production, scaling one real product. It is not a
-framework, it is not versioned, and the API will change.
+A working system, in production, maintaining one real product. Not a
+framework, not versioned, and the API will change.
 
 The idea is the portable part.

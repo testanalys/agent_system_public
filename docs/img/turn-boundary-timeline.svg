@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="420" viewBox="0 0 760 420" role="img">
+<title>They own the loop, we own the boundary</title>
+<desc>On the left, the provider's territory: a VM with a fresh clone and sandbox servers, inside which the provider's CLI harness runs a multi-turn agent loop. On the right, after the turn boundary, the outer harness reads the net diff, every tool call and the prose the agent wrote, and returns one verdict.</desc>
+<defs>
+  <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#854F0B"/></marker>
+  <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0F6E56"/></marker>
+</defs>
+<style>
+  .t  { font: 400 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .th { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .ts { font: 400 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+  .tl { font: 500 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+</style>
+
+<rect x="0" y="0" width="760" height="420" fill="#ffffff"/>
+<text class="th" x="40" y="34" fill="#2C2C2A">The provider owns the loop. We own the turn boundary.</text>
+
+<!-- Provider territory -->
+<rect x="40" y="56" width="456" height="262" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.75"/>
+<text class="th" x="58" y="80" fill="#412402">Provider's agent harness</text>
+<text class="ts" x="478" y="80" text-anchor="end" fill="#854F0B">Cursor, Claude Code, Codex …</text>
+
+<rect x="58" y="96" width="420" height="204" rx="6" fill="#FDF7EC" stroke="#854F0B" stroke-width="0.75" stroke-dasharray="4 3"/>
+<text class="tl" x="74" y="118" fill="#854F0B">its own VM · a fresh clone · sandbox servers like production</text>
+
+<!-- turns -->
+<rect x="74" y="140" width="72" height="40" rx="6" fill="#ffffff" stroke="#854F0B" stroke-width="0.75"/>
+<text class="tl" x="110" y="165" text-anchor="middle" fill="#412402">turn 1</text>
+<rect x="166" y="140" width="72" height="40" rx="6" fill="#ffffff" stroke="#854F0B" stroke-width="0.75"/>
+<text class="tl" x="202" y="165" text-anchor="middle" fill="#412402">turn 2</text>
+<rect x="258" y="140" width="72" height="40" rx="6" fill="#ffffff" stroke="#854F0B" stroke-width="0.75"/>
+<text class="tl" x="294" y="165" text-anchor="middle" fill="#412402">turn 3</text>
+<text class="th" x="350" y="165" fill="#854F0B">…</text>
+<rect x="388" y="140" width="72" height="40" rx="6" fill="#ffffff" stroke="#854F0B" stroke-width="0.75"/>
+<text class="tl" x="424" y="165" text-anchor="middle" fill="#412402">turn n</text>
+<line x1="146" y1="160" x2="164" y2="160" stroke="#854F0B" stroke-width="1" marker-end="url(#ag)"/>
+<line x1="238" y1="160" x2="256" y2="160" stroke="#854F0B" stroke-width="1" marker-end="url(#ag)"/>
+
+<text class="ts" x="74" y="208" fill="#854F0B">model ↔ tools ↔ repo, as many times as it takes</text>
+<text class="ts" x="74" y="228" fill="#854F0B">read code · run tests · hit the sandbox · edit · retry</text>
+<text class="ts" x="74" y="248" fill="#854F0B">its hooks, its rules, its subagents, its compaction</text>
+<text class="tl" x="74" y="280" fill="#412402">We don't touch any of this. It improves with every release.</text>
+
+<!-- boundary -->
+<line x1="526" y1="48" x2="526" y2="330" stroke="#0F6E56" stroke-width="1.5" stroke-dasharray="6 4"/>
+<rect x="470" y="330" width="112" height="24" rx="12" fill="#ffffff" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="tl" x="526" y="346" text-anchor="middle" fill="#0F6E56">turn boundary</text>
+<line x1="498" y1="160" x2="552" y2="160" stroke="#0F6E56" stroke-width="1.5" marker-end="url(#at)"/>
+
+<!-- Outer harness -->
+<rect x="556" y="56" width="164" height="262" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.75"/>
+<text class="th" x="572" y="80" fill="#04342C">Outer harness</text>
+<text class="ts" x="572" y="98" fill="#0F6E56">ours · never cloned</text>
+<text class="tl" x="572" y="134" fill="#04342C">It reads</text>
+<text class="ts" x="572" y="154" fill="#0F6E56">the net diff</text>
+<text class="ts" x="572" y="172" fill="#0F6E56">every tool call</text>
+<text class="ts" x="572" y="190" fill="#0F6E56">the prose it wrote</text>
+<text class="ts" x="572" y="208" fill="#0F6E56">the history of each file</text>
+<text class="tl" x="572" y="240" fill="#04342C">It returns</text>
+<text class="ts" x="572" y="260" fill="#0F6E56">one verdict</text>
+<text class="ts" x="572" y="278" fill="#0F6E56">and a re-prompt</text>
+
+<rect x="40" y="370" width="680" height="40" rx="4" fill="none" stroke="#B4B2A9" stroke-width="0.75" stroke-dasharray="4 4"/>
+<text class="t" x="60" y="395" fill="#2C2C2A">Mid-run you see one tool call. At the boundary you see the behaviour.</text>
+</svg>

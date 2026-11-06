@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "turnstile"
+name = "outer-harness"
 version = "1.0.0"
-description = "A system-level harness for coding agents: classifier, gates, roles, reconciler"
+description = "An outer harness for coding agents: judge at the turn boundary, gate production through source control, close the loop on signals"
 requires-python = ">=3.11"
 # Standard library only, deliberately. This installs into a slim Cloud Run
 # image with no build step and no platform constraints - which is also why
@@ -19,7 +19,7 @@ history = "harness.history:main"
 agent-tick = "reconciler.tick:main"
 
 [tool.setuptools]
-packages = ["harness", "harness.oracle_kit", "harness.scorecard", "roles", "reconciler", "cloud", "dashboard"]
+packages = ["loop", "harness", "harness.oracle_kit", "harness.scorecard", "roles", "reconciler", "cloud", "dashboard"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

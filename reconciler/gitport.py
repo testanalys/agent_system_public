@@ -52,29 +52,40 @@ class RepoPort:
         return proc.stdout.strip()
 
     def fetch(self, branch: str) -> None:
-        self._git("fetch", self.remote, f"{branch}:refs/agent/{branch}",
+        src = branch if branch.startswith("refs/") else f"refs/heads/{branch}"
+        self._git("fetch", self.remote, f"{src}:refs/agent/{branch}",
                   "--force")
 
     def fetch_until(self, branch: str, timeout_s: int = 120,
                     interval_s: float = 5) -> None:
-        """Wait for Cursor's push to show up on origin.
+        self.fetch_until_any([branch], timeout_s=timeout_s,
+                             interval_s=interval_s)
 
-        A finished run that names a branch GitHub does not have yet is a
-        timing gap, not a thinking failure. Bounded wait; then fail.
+    def fetch_until_any(self, branches: list[str], timeout_s: int = 120,
+                        interval_s: float = 5) -> str:
+        """Wait until any of these names shows up on origin.
+
+        Cursor's create-time name and the VM's checkout -b are often
+        different. Waiting on one ghost while the other is already
+        published is how we used to miss the work.
         """
+        names = [b for b in branches if b]
+        if not names:
+            raise RuntimeError("no branch names to fetch")
         deadline = time.monotonic() + timeout_s
         last: Exception | None = None
         while True:
-            try:
-                self.fetch(branch)
-                return
-            except Exception as exc:  # noqa: BLE001
-                last = exc
-                if time.monotonic() >= deadline:
-                    raise RuntimeError(
-                        f"branch {branch!r} not on {self.remote} after "
-                        f"{timeout_s}s: {exc}") from last
-                time.sleep(interval_s)
+            for branch in names:
+                try:
+                    self.fetch(branch)
+                    return branch
+                except Exception as exc:  # noqa: BLE001
+                    last = exc
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"none of {names!r} on {self.remote} after "
+                    f"{timeout_s}s: {last}") from last
+            time.sleep(interval_s)
 
     def current_base(self) -> str:
         self._git("fetch", self.remote, self.base, "--force")
