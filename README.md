@@ -1,24 +1,29 @@
-# Outer Harness
-
-**Let the model lab own the agent loop. Own the merge.**
-
 This README explains a harness framework for running a fleet of agents
 that maintain production code **sustainably**: the system improves itself
 on its own, does not break while doing it, and grows the thing it
 maintains toward its goals.
 
+It is a framework for running a production system with agents supporting
+it and minimal human oversight. The system can be an API, a data pipeline
+or a web page. Its code runs on its own schedule, and agents monitor it
+and append to it, edit it, fix it and improve it, with no one reviewing
+each change.
+
+> **The way to do this: let model labs own the agent loop, virtualise the
+> agents to a VM and a sandbox, and then we own the harness.**
+
+This framework was built to run and scale [regest.ai](https://regest.ai),
+a data pipeline and search API maintained by agents in production. The
+rest of this README covers how it works there: why constraint belongs
+outside the agent's loop, how source control becomes the only gate to
+production, and how the system finds its own work and improves its own
+gate.
+
+---
+
+# Outer Harness
+
 ![The loop](docs/img/the-loop.svg)
-
-Built to run and scale [regest.ai](https://regest.ai): a data pipeline and
-search API maintained by agents, in production.
-
-| | The idea | In one line |
-|---|---|---|
-| 1 | [Why not constrain inside the agent harness](#1-why-not-constrain-inside-the-agent-harness) | Constraints placed there get worked around, or edited. |
-| 2 | [The outer harness: the provider owns the loop, we own the turn boundary](#2-the-outer-harness-the-provider-owns-the-loop-we-own-the-turn-boundary) | One layer constrains everything, so agents can loop freely. |
-| 3 | [Source control is the control plane. A merge is a deploy.](#3-source-control-is-the-control-plane-a-merge-is-a-deploy) | The classifier is the only path to production. |
-| 4 | [Everything becomes a signal](#4-everything-becomes-a-signal) | Deterministic output and agent output both start agents. |
-| 5 | [The gate's mistakes are data](#5-the-gates-mistakes-are-data) | RED verdicts tell you whether the gate itself is right. |
 
 ---
 
